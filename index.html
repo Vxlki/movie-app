@@ -98,6 +98,17 @@ nav.tabs svg{width:24px;height:24px}
 .hero{position:relative;min-height:calc(190px + var(--safe-t));background:var(--s1) center/cover no-repeat}
 .hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,17,28,.3) 0%,rgba(20,17,28,.55) 50%,var(--bg) 100%)}
 .close{position:absolute;z-index:2;top:calc(var(--safe-t) + 10px);left:12px;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.5);font-size:18px;display:flex;align-items:center;justify-content:center}
+.back{position:absolute;z-index:3;top:calc(var(--safe-t) + 12px);left:12px;display:flex;align-items:center;gap:2px;padding:8px 16px 8px 8px;
+  border-radius:22px;background:rgba(20,17,28,.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);font-weight:700;font-size:16px;color:var(--tx);
+  border:1px solid rgba(255,255,255,.12)}
+.back svg{width:22px;height:22px}
+.back.inline{position:static;margin-bottom:10px}
+.grab{position:absolute;z-index:3;top:calc(var(--safe-t) + 5px);left:50%;transform:translateX(-50%);width:42px;height:5px;border-radius:3px;background:rgba(255,255,255,.4)}
+.sbar{position:fixed;top:0;left:0;right:0;z-index:4;display:flex;align-items:center;gap:10px;padding:calc(var(--safe-t) + 8px) 12px 8px;
+  background:rgba(20,17,28,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line);transform:translateY(-110%);transition:transform .2s}
+.sbar.on{transform:none}
+.sbar .back{position:static;background:var(--s2)}
+.sbt{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .head{position:relative;z-index:2;display:flex;gap:14px;align-items:flex-end;padding:0 16px;margin-top:-96px}
 .head h2{margin:0;font-size:22px;line-height:1.2;letter-spacing:-.01em}
 .head .orig{color:var(--mu);font-size:14px;margin-top:2px}
@@ -170,6 +181,16 @@ input[type=date].field{width:100%;-webkit-appearance:none;min-height:44px}
 .lnk{color:var(--gold);font-size:13px;font-weight:650;margin-top:6px}
 .foot{position:sticky;bottom:0;padding:14px 0 calc(8px + var(--safe-b));background:linear-gradient(rgba(20,17,28,0),var(--bg) 35%)}
 .btn[disabled]{opacity:.4}
+.egg{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;padding:28px;background:rgba(10,8,16,.75);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;transition:opacity .3s}
+.egg.show{opacity:1}
+.eggcard{max-width:420px;width:100%;max-height:80vh;overflow-y:auto;background:linear-gradient(160deg,#2c2242,#1b1726);border:1px solid rgba(255,196,64,.3);
+  border-radius:22px;padding:26px 22px 20px;box-shadow:0 24px 70px rgba(0,0,0,.65);transform:scale(.9) translateY(10px);transition:transform .45s cubic-bezier(.2,.9,.3,1.25)}
+.egg.show .eggcard{transform:none}
+.eggtag{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:16px}
+.eggcard p{font-family:Georgia,"Times New Roman",serif;font-size:20px;line-height:1.55;font-style:italic;margin:0 0 20px;color:#f6f1fb}
+.secret{display:block;width:100%;text-align:left;padding:10px 12px;margin:6px 0;border-radius:10px;background:var(--s2);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.secret.lock{color:var(--mu2);letter-spacing:.25em;cursor:default}
 #toast{position:fixed;left:50%;bottom:calc(86px + var(--safe-b));transform:translate(-50%,20px);opacity:0;z-index:60;background:#f3eff8;color:#14111c;
   padding:10px 16px;border-radius:12px;font-size:14px;font-weight:600;transition:.25s;pointer-events:none;max-width:88vw;text-align:center}
 #toast.show{opacity:1;transform:translate(-50%,0)}
@@ -188,6 +209,7 @@ input[type=date].field{width:100%;-webkit-appearance:none;min-height:44px}
 
 <div id="sheet" aria-hidden="true"></div>
 <div id="toast"></div>
+<div id="egg" class="egg hide" data-act="eggClose"></div>
 <input type="file" id="nfFile" accept=".csv,text/csv,text/comma-separated-values,text/plain" style="position:absolute;width:1px;height:1px;opacity:0;left:-10px;top:0">
 <input type="file" id="restoreFile" accept="application/json,text/plain,.json,.txt" style="position:absolute;width:1px;height:1px;opacity:0;left:-10px;top:0">
 
@@ -199,7 +221,7 @@ input[type=date].field{width:100%;-webkit-appearance:none;min-height:44px}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '1.2';
+const APP_VERSION = '1.4';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
@@ -218,9 +240,9 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 function load() {
   try {
     const d = JSON.parse(localStorage.getItem(STORE_KEY));
-    if (d && d.items) { d.settings = Object.assign({ tmdbKey: '', lastBackup: null }, d.settings); return d; }
+    if (d && d.items) { d.settings = Object.assign({ tmdbKey: '', lastBackup: null }, d.settings); d.secrets = d.secrets || {}; return d; }
   } catch (e) {}
-  return { v: 1, items: {}, settings: { tmdbKey: '', lastBackup: null } };
+  return { v: 1, items: {}, settings: { tmdbKey: '', lastBackup: null }, secrets: {} };
 }
 let db = load();
 function save() {
@@ -369,6 +391,7 @@ function poster(p, title, cls = '', w = 'w185') {
   return p ? `<img class="poster ${cls}" loading="lazy" src="${IMG(p, w)}" alt="" onerror="this.removeAttribute('src')">`
            : `<div class="poster ph ${cls}">${esc(initials(title))}</div>`;
 }
+const BACK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Înapoi`;
 const scoreBox = (r) => r ? `<div class="score">${r}</div>` : `<div class="score none">–</div>`;
 function backupBanner() {
   if (ui.bannerOff || !items().length) return '';
@@ -536,7 +559,7 @@ V.stats = {
     const gc = {};
     for (const i of all) if ((i.type === 'movie' && i.status === 'watched') || (i.type === 'tv' && countWatchedEps(i))) for (const g of i.genres || []) gc[g] = (gc[g] || 0) + 1;
     const top = Object.entries(gc).sort((a, b) => b[1] - a[1]).slice(0, 6); const gmx = top.length ? top[0][1] : 1;
-    if (!all.length) return `<div class="wrap"><div class="empty"><b>Încă nu sunt date</b>Statisticile apar după ce adaugi filme și seriale.</div></div>`;
+    if (!all.length) return `<div class="wrap"><div class="empty"><b>Încă nu sunt date</b>Statisticile apar după ce adaugi filme și seriale.</div>${secretsHtml()}</div>`;
     return `<div class="wrap">
       <div class="kpis">
         <div class="kpi"><b>${mv.length}</b><span>filme văzute</span></div>
@@ -550,6 +573,7 @@ V.stats = {
       <div class="chart"><h4>Episoade pe lună</h4>${cols(eCount, 'ep')}</div>
       ${rated.length ? `<div class="chart"><h4>Notele tale</h4><div class="cols rt">${dist.map((v, i) => `<div><em>${v || ''}</em><i style="height:${v / dmx * 100}%"></i><span>${i + 1}</span></div>`).join('')}</div></div>` : ''}
       ${top.length ? `<div class="chart"><h4>Genuri preferate</h4>${top.map(([g, n]) => `<div class="hbar"><span>${esc(g)}</span><div class="bar"><i style="width:${n / gmx * 100}%"></i></div><b>${n}</b></div>`).join('')}</div>` : ''}
+      ${secretsHtml()}
     </div>`;
   }
 };
@@ -605,15 +629,52 @@ function refresh() { renderHeadCounts(); renderList(); }
 /* ---------- foaia de detalii ---------- */
 let ctx = null; // { key, type, tmdbId, d, open:{}, seasons:{} }
 function showSheet() {
-  const s = $('#sheet'); s.scrollTop = 0; s.classList.add('open'); s.setAttribute('aria-hidden', 'false');
+  const s = $('#sheet'); s.scrollTop = 0;
+  if (!s.classList.contains('open')) { try { history.pushState({ sheet: 1 }, ''); } catch (e) {} }
+  s.style.transition = ''; s.style.transform = '';
+  s.classList.add('open'); s.setAttribute('aria-hidden', 'false');
   document.documentElement.classList.add('lock');
 }
-function closeSheet() {
-  const s = $('#sheet'); s.classList.remove('open'); s.setAttribute('aria-hidden', 'true');
+function closeSheet(mode, fromPop) {
+  const s = $('#sheet'); if (!s.classList.contains('open')) return;
+  s.style.transition = '';
+  s.style.transform = mode === 'x' ? 'translateX(100%)' : '';
+  s.classList.remove('open'); s.setAttribute('aria-hidden', 'true');
   document.documentElement.classList.remove('lock'); ctx = null;
-  setTimeout(() => { if (!ctx) s.innerHTML = ''; }, 300);
+  setTimeout(() => { if (!s.classList.contains('open')) { s.style.transition = 'none'; s.style.transform = ''; if (!ctx) s.innerHTML = ''; } }, 320);
+  if (!fromPop && history.state && history.state.sheet) { try { history.back(); } catch (e) {} }
   refresh();
 }
+window.addEventListener('popstate', () => closeSheet(null, true)); // butonul „înapoi” al sistemului / browserului
+(() => { // gesturi: tragi în jos de sus sau glisezi de la marginea stângă ca să revii
+  const sh = $('#sheet'); let g = null;
+  sh.addEventListener('scroll', syncSbar, { passive: true });
+  sh.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1 || !sh.classList.contains('open')) { g = null; return; }
+    const t = e.touches[0];
+    g = { x: t.clientX, y: t.clientY, top: sh.scrollTop <= 0, edge: t.clientX < 30, dx: 0, dy: 0, mode: null, t0: Date.now() };
+  }, { passive: true });
+  sh.addEventListener('touchmove', (e) => {
+    if (!g) return;
+    const t = e.touches[0]; g.dx = t.clientX - g.x; g.dy = t.clientY - g.y;
+    if (!g.mode) {
+      if (g.edge && g.dx > 8 && g.dx > Math.abs(g.dy)) g.mode = 'x';
+      else if (g.top && g.dy > 8 && g.dy > Math.abs(g.dx)) g.mode = 'y';
+      else if (Math.abs(g.dx) > 10 || Math.abs(g.dy) > 10) { g = null; return; }
+      else return;
+    }
+    e.preventDefault();
+    sh.style.transition = 'none';
+    sh.style.transform = g.mode === 'y' ? `translateY(${Math.max(0, g.dy)}px)` : `translateX(${Math.max(0, g.dx)}px)`;
+  }, { passive: false });
+  const end = () => {
+    if (!g || !g.mode) { g = null; return; }
+    const d = g.mode === 'y' ? g.dy : g.dx, v = d / Math.max(1, Date.now() - g.t0), mode = g.mode; g = null;
+    sh.style.transition = '';
+    if (d > 110 || (d > 30 && v > 0.5)) closeSheet(mode); else sh.style.transform = '';
+  };
+  sh.addEventListener('touchend', end); sh.addEventListener('touchcancel', end);
+})();
 async function openDetail(type, id) {
   const key = `${type}:${id}`, it = db.items[key];
   ctx = { key, type, tmdbId: Number(id), d: searchPreview.get(key) || null, full: false, open: {}, seasons: {}, err: '' };
@@ -656,7 +717,7 @@ function renderSheet() {
   if (ctx.imp) return renderImport();
   const el = $('#sheet'), y = el.scrollTop;
   const { it, saved, partial } = sheetItem();
-  if (!it) { el.innerHTML = `<div class="hero"><button class="close" data-act="close">✕</button></div><div class="body"><div class="spin">${ctx.err ? esc(ctx.err) : 'Se încarcă…'}</div></div>`; return; }
+  if (!it) { el.innerHTML = `<div class="hero"><div class="grab"></div><button class="back" data-act="close">${BACK}</button></div><div class="body"><div class="spin">${ctx.err ? esc(ctx.err) : 'Se încarcă…'}</div></div>`; return; }
   const d = ctx.d || {};
   const genres = (it.genres && it.genres.length ? it.genres : []).slice(0, 3).join(', ');
   let info = [it.year];
@@ -665,7 +726,8 @@ function renderSheet() {
   if (it.type === 'tv' && it.showStatus) info.push(SHOW_ST[it.showStatus] || it.showStatus);
   info = info.filter(Boolean).join(' · ');
   const bd = it.backdrop ? `style="background-image:url('${IMG(it.backdrop, 'w780')}')"` : '';
-  let h = `<div class="hero" ${bd}><button class="close" data-act="close" aria-label="Închide">✕</button></div>
+  let h = `<div class="sbar"><button class="back" data-act="close">${BACK}</button><span class="sbt">${esc(it.title)}</span></div>
+    <div class="hero" ${bd}><div class="grab"></div><button class="back" data-act="close">${BACK}</button></div>
     <div class="head">${poster(it.poster, it.title, 'big', 'w342')}<div class="meta">
       <h2>${esc(it.title)}</h2>${it.originalTitle && it.originalTitle !== it.title ? `<div class="orig">${esc(it.originalTitle)}</div>` : ''}
       <div class="sub">${esc(info)}</div>${genres ? `<div class="sub">${esc(genres)}</div>` : ''}</div></div>
@@ -724,14 +786,15 @@ function renderSheet() {
   }
   if (saved) h += `<div class="sec"><button class="btn danger block" data-act="del">Șterge din listă</button></div>`;
   h += `</div>`;
-  el.innerHTML = h; el.scrollTop = y;
+  el.innerHTML = h; el.scrollTop = y; syncSbar();
 }
+function syncSbar() { const s = $('#sheet'), b = s.querySelector('.sbar'); if (b) b.classList.toggle('on', s.scrollTop > 150); }
 
 /* ---------- formular manual ---------- */
 function openManual() {
   ctx = { key: null, manualForm: true };
   const el = $('#sheet');
-  el.innerHTML = `<div class="top" style="position:relative"><button class="close" style="position:static;margin-bottom:10px" data-act="close">✕</button><h1>Adaugă manual</h1></div>
+  el.innerHTML = `<div class="top" style="position:relative"><button class="back inline" data-act="close">${BACK}</button><h1>Adaugă manual</h1></div>
    <div class="body">
     <div class="formrow"><label>Tip</label><div class="chips" id="mType"><button class="on" data-act="mType" data-t="movie">Film</button><button data-act="mType" data-t="tv">Serial</button></div></div>
     <div class="formrow"><label>Titlu</label><input class="field" id="mTitle" placeholder="ex. Nașul"></div>
@@ -795,12 +858,14 @@ const A = {
     db.items[it.key] = it; save();
     toast(it.type === 'movie' ? (a.st === 'watched' ? 'Adăugat la văzute' : 'Adăugat la „De văzut”') : 'Serial adăugat');
     renderSheet();
+    if (a.st === 'watched' || a.st === 'all') maybeEgg();
   },
   status(a) {
     const it = curItem(); if (!it) return;
     it.status = a.st; touch(it);
     if (it.type === 'movie' && a.st === 'watched' && !it.watchedOn) it.watchedOn = today();
     save(); renderSheet();
+    if (a.st === 'watched' || a.st === 'completed') maybeEgg();
   },
   rate(a) { const it = curItem(); if (!it) return; const v = Number(a.v); it.rating = it.rating === v ? null : v; touch(it); save(); renderSheet(); },
   del() {
@@ -817,29 +882,32 @@ const A = {
     for (let i = 1; i <= sp.a; i++) setEp(it, n, i, on);
     autoTvStatus(it); touch(it); save(); renderSheet();
     toast(on ? `Sezonul ${n} marcat ca văzut` : `Sezonul ${n} debifat`);
+    if (on) maybeEgg();
   },
   ep(a) {
     const it = ensureSaved(); if (!it) return;
     const s = Number(a.s), e = Number(a.e);
-    setEp(it, s, e, !isW(it, s, e)); autoTvStatus(it); touch(it); save(); renderSheet();
+    const on = !isW(it, s, e);
+    setEp(it, s, e, on); autoTvStatus(it); touch(it); save(); renderSheet();
+    if (on) maybeEgg();
   },
   allEps() {
     const it = curItem(); if (!it) return;
     if (!confirm('Marchezi toate episoadele difuzate ca văzute?')) return;
     for (const s of it.seasons) for (let e = 1; e <= airedIn(it, s.n); e++) setEp(it, s.n, e, true);
-    autoTvStatus(it); touch(it); save(); renderSheet();
+    autoTvStatus(it); touch(it); save(); renderSheet(); maybeEgg();
   },
   nextEp(a, el, e) {
     e.stopPropagation();
     const it = db.items[a.key]; const nx = it && nextEp(it); if (!nx) return;
     setEp(it, nx.s, nx.e, true); autoTvStatus(it); touch(it); save();
-    toast(`✓ ${it.title} · S${nx.s} E${nx.e}`); refresh();
+    toast(`✓ ${it.title} · S${nx.s} E${nx.e}`); refresh(); maybeEgg();
   },
   quickWatched(a, el, e) {
     e.stopPropagation();
     const it = db.items[a.key]; if (!it) return;
     it.status = 'watched'; it.watchedOn = today(); touch(it); save();
-    toast('Mutat la văzute. Dă-i și o notă!'); refresh(); openItem(it.key);
+    toast('Mutat la văzute. Dă-i și o notă!'); refresh(); openItem(it.key); maybeEgg();
   },
 
   async saveKey() {
@@ -852,6 +920,8 @@ const A = {
   },
   clearKey() { db.settings.tmdbKey = ''; save(); ui.sRes = null; renderList(); toast('Cheie ștearsă'); },
   backup() { doBackup(); },
+  eggClose() { hideEgg(); },
+  eggOpen(a) { const e = eggs.find((x) => x.id === a.id); if (e) showEgg(e, false); },
   nfPick() { if (!db.settings.tmdbKey) return toast('Adaugă întâi cheia TMDB'); $('#nfFile').value = ''; $('#nfFile').click(); },
   impProfile(a) { const imp = ctx.imp; imp.rows = imp.rows.filter((r) => r.profile === a.p); imp.stage = 'analyzing'; renderSheet(); nfAnalyze(imp.rows); },
   impFilter(a) { ctx.imp.filter = a.f; renderSheet(); },
@@ -899,7 +969,7 @@ $('#restoreFile').addEventListener('change', async (e) => {
     if (!d || typeof d.items !== 'object') throw new Error('format');
     const n = Object.keys(d.items).length, cur = items().length;
     if (!confirm(`Backup din ${d.exportedAt ? fmtDate(d.exportedAt.slice(0, 10)) : '?'} cu ${n} titluri.\nÎnlocuiești datele actuale (${cur} titluri)?`)) return;
-    db = { v: 1, items: d.items, settings: Object.assign({ tmdbKey: '', lastBackup: null }, d.settings) };
+    db = { v: 1, items: d.items, settings: Object.assign({ tmdbKey: '', lastBackup: null }, d.settings), secrets: Object.assign({}, db.secrets, d.secrets) };
     db.settings.lastBackup = Date.now(); save(); apiCache.clear(); ui.sRes = null; renderView(); toast('Date restaurate ✓');
   } catch (err) { toast('Fișierul nu e un backup valid'); }
 });
@@ -1114,7 +1184,7 @@ function nfRow(g, i) {
 }
 function renderImport() {
   const imp = ctx.imp, el = $('#sheet'), y = el.scrollTop;
-  let h = `<div class="top"><button class="close" style="position:static;margin-bottom:10px" data-act="close">✕</button><h1>Import Netflix</h1>`;
+  let h = `<div class="top"><button class="back inline" data-act="close">${BACK}</button><h1>Import Netflix</h1>`;
   if (imp.stage === 'review') {
     const nCheck = imp.groups.filter(nfCheck).length;
     h += `<div class="seg"><button class="${imp.filter === 'all' ? 'on' : ''}" data-act="impFilter" data-f="all">Toate<span class="n">${imp.groups.length}</span></button>
@@ -1171,6 +1241,58 @@ async function nfImport() {
   imp.stage = 'done'; renderSheet();
 }
 
+/* ---------- secrete (easter eggs) ----------
+   Mesajele stau în fișierul secrete.txt (un mesaj pe rând, " / " = rând nou).
+   Apar cu o șansă de 1 din 10 la deschiderea aplicației, când marchezi un film ca văzut
+   sau când bifezi episoade. Cele găsite se adună în Statistici. */
+const EGG_CHANCE = 0.1;
+let eggs = [];
+function eggId(t) { let h = 0; for (const ch of norm(t)) h = (Math.imul(h, 31) + ch.codePointAt(0)) | 0; return 'e' + (h >>> 0).toString(36); }
+function parseEggs(txt) {
+  const seen = new Set(), out = [];
+  for (let l of txt.split(/\r?\n/)) {
+    l = l.trim(); if (!l || l.startsWith('#')) continue;
+    l = l.replace(/^[*\-•]\s+/, '').replace(/^["„“”«']+/, '').replace(/["“”»']+$/, '').trim();
+    if (!l) continue;
+    const id = eggId(l); if (seen.has(id)) continue; seen.add(id);
+    out.push({ id, text: l });
+  }
+  return out;
+}
+async function loadEggs() {
+  try { const r = await fetch('secrete.txt', { cache: 'no-cache' }); if (r.ok) eggs = parseEggs(await r.text()); } catch (e) {}
+  if (ui.tab === 'stats') renderList();
+}
+const eggFound = () => eggs.filter((e) => db.secrets[e.id]).length;
+function maybeEgg() {
+  if (!eggs.length || Math.random() >= EGG_CHANCE) return false;
+  const fresh = eggs.filter((e) => !db.secrets[e.id]);
+  const list = fresh.length ? fresh : eggs; // întâi cele negăsite
+  const e = list[Math.floor(Math.random() * list.length)];
+  const isNew = !db.secrets[e.id];
+  if (isNew) { db.secrets[e.id] = today(); save(); }
+  showEgg(e, isNew);
+  return true;
+}
+function showEgg(e, isNew) {
+  const el = $('#egg');
+  $('#toast').classList.remove('show');
+  const lines = e.text.split(/\s+\/\s+/).map(esc).join('<br>');
+  el.innerHTML = `<div class="eggcard"><div class="eggtag">✦ ${isNew ? 'Secret nou găsit' : 'Secret'} · ${eggFound()}/${eggs.length}</div><p>${lines}</p><div class="small">Atinge oriunde ca să închizi</div></div>`;
+  el.classList.remove('hide'); requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+  if (ui.tab === 'stats') renderList();
+}
+function hideEgg() { const el = $('#egg'); el.classList.remove('show'); setTimeout(() => el.classList.add('hide'), 300); }
+function secretsHtml() {
+  if (!eggs.length) return '';
+  const n = eggFound();
+  return `<div class="chart"><h4>Secrete găsite · ${n}/${eggs.length}</h4>
+    ${n ? '' : '<p class="small" style="margin:-4px 0 8px">Apar la întâmplare când folosești aplicația…</p>'}
+    ${eggs.map((e) => db.secrets[e.id]
+      ? `<button class="secret" data-act="eggOpen" data-id="${e.id}">✦ ${esc(e.text.split(/\s+\/\s+/)[0])}</button>`
+      : `<div class="secret lock">? ? ?</div>`).join('')}</div>`;
+}
+
 /* ---------- evenimente ---------- */
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]'); if (!el) return;
@@ -1207,6 +1329,12 @@ window.addEventListener('online', () => { if (ui.tab === 'search' && !ui.sRes) r
 
 /* ---------- pornire ---------- */
 renderView();
+loadEggs().then(() => setTimeout(maybeEgg, 700));
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) hiddenAt = Date.now();
+  else if (hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000) maybeEgg(); // revenire în aplicație după 5+ minute
+});
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>

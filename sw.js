@@ -1,6 +1,6 @@
 // Service worker: face aplicația să meargă offline.
 // Când modifici index.html, crește VERSION ca telefonul să ia versiunea nouă.
-const VERSION = 'filme-v4';
+const VERSION = 'filme-v5';
 const SHELL = [
   './',
   './index.html',
