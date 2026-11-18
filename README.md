@@ -5,7 +5,7 @@ Datele despre filme vin de la TMDB. Datele tale stau doar pe telefon.
 
 ## Publicare pe GitHub Pages
 1. Creează un repository public numit `filme`.
-2. Încarcă toate fișierele din acest folder, inclusiv iconițele.
+2. Încarcă toate fișierele din acest folder, inclusiv folderul `icons`.
 3. Mergi la Settings → Pages → Source: „Deploy from a branch” → `main` / `(root)` → Save.
 4. După 1–2 minute aplicația e la `https://NUMELE-TAU.github.io/filme/`.
 

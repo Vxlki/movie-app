@@ -936,13 +936,16 @@ function parseDate(s, fmt) {
 }
 const SEASON_RE = /^(?:season|sezonul|sezon|series|part|partea|volume|volumul|vol\.?|book|cartea|collection|colec[tţț]ia)\s*(\d+)$/i;
 const LIMITED_RE = /^(?:limited series|miniseries|mini-series|miniserie|miniseria|serie limitat[aă]|serial limitat)$/i;
-const EPNUM_RE = /^(?:episode|episodul|episod|ep\.?)\s*(\d+)\b/i;
+const EPNUM_RE = /^(?:episode|episodul|episod|ep\.?|chapter|capitolul)\s*(\d+)\b/i;
+const ARC_RE = /\b(?:arc|saga)$/i;
+const norm2 = (s) => norm(s).split(' ').filter((w) => w.length > 1).join(' ');
 function parseTitle(t) {
   const parts = t.split(/:\s+/).map((s) => s.trim());
   for (let i = 1; i < parts.length - 1; i++) { // trebuie să existe și titlul episodului după sezon
     const m = parts[i].match(SEASON_RE);
-    if (m) return { show: parts.slice(0, i).join(': '), season: +m[1], ep: parts.slice(i + 1).join(': ') };
+    if (m) return { show: parts.slice(0, i).join(': '), season: +m[1], part: /^part/i.test(parts[i]), ep: parts.slice(i + 1).join(': ') };
     if (LIMITED_RE.test(parts[i])) return { show: parts.slice(0, i).join(': '), season: 1, ep: parts.slice(i + 1).join(': ') };
+    if (ARC_RE.test(parts[i])) return { show: parts.slice(0, i).join(': '), season: null, ep: parts.slice(i + 1).join(': ') };
   }
   return { parts };
 }
@@ -968,10 +971,10 @@ function nfParse(text) {
 function nfGroup(rows) {
   const tv = new Map(), mv = new Map(), amb = new Map();
   const addMovie = (r) => { const g = mv.get(r.title) || { kind: 'movie', name: r.title, dates: [] }; if (r.date) g.dates.push(r.date); mv.set(r.title, g); };
-  const tvRow = (k, season, ep, date) => { const g = tv.get(k) || { kind: 'tv', name: k, rows: [] }; g.rows.push({ season, ep, date }); tv.set(k, g); };
+  const tvRow = (k, season, ep, date, part) => { const g = tv.get(k) || { kind: 'tv', name: k, rows: [] }; g.rows.push({ season, ep, date, part: !!part }); tv.set(k, g); };
   for (const r of rows) {
     const p = parseTitle(r.title);
-    if (p.show) tvRow(p.show, p.season, p.ep, r.date);
+    if (p.show) tvRow(p.show, p.season, p.ep, r.date, p.part);
     else if (p.parts.length >= 2) { const k = p.parts[0]; if (!amb.has(k)) amb.set(k, []); amb.get(k).push(r); }
     else addMovie(r);
   }
@@ -986,13 +989,29 @@ function nfGroup(rows) {
   out.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'tv' ? -1 : 1) || (b.date || '').localeCompare(a.date || ''));
   return out;
 }
+async function searchTitle(kind, q) { // încearcă și variante: fără paranteze „(U.S.)”, „(2011)”, fără „, M.D.”
+  const tries = [{ query: q }];
+  const m = q.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+  if (m) tries.push(/^\d{4}$/.test(m[2]) ? { query: m[1], [kind === 'movie' ? 'year' : 'first_air_date_year']: m[2] } : { query: m[1] });
+  if (q.includes(',')) tries.push({ query: q.split(',')[0] });
+  for (const t of tries) {
+    const r = (await tmdb(`/search/${kind}`, { ...t, include_adult: 'false' })).results || [];
+    if (r.length) return { res: r, q: t.query };
+  }
+  return { res: [], q };
+}
 async function nfMatch(g) {
-  const q = g.query || g.name;
-  let res = (await tmdb(g.kind === 'movie' ? '/search/movie' : '/search/tv', { query: q, include_adult: 'false' })).results || [];
-  if (!res.length && g.kind === 'movie' && !g.query && q.includes(': ')) { // poate e un singur episod dintr-un serial
-    const show = q.split(/:\s+/)[0];
-    const tvr = (await tmdb('/search/tv', { query: show, include_adult: 'false' })).results || [];
-    if (tvr.length) { Object.assign(g, { kind: 'tv', name: show, rows: g.dates.map((d) => ({ season: null, ep: q.slice(show.length).replace(/^:\s*/, ''), date: d })) }); res = tvr; }
+  let { res, q } = await searchTitle(g.kind, g.query || g.name);
+  if (!res.length && g.kind === 'movie' && !g.query && g.name.includes(': ')) { // poate e un episod dintr-un serial
+    const parts = g.name.split(/:\s+/);
+    for (let k = parts.length - 1; k >= 1 && !res.length; k--) {
+      const show = parts.slice(0, k).join(': '), r = await searchTitle('tv', show);
+      if (r.res.length) {
+        const ep = parts.slice(k).join(': ');
+        Object.assign(g, { kind: 'tv', name: show, rows: g.dates.map((d) => ({ season: null, ep, date: d })) });
+        res = r.res; q = r.q;
+      }
+    }
   }
   g.cands = res.slice(0, 6);
   const n = norm(q);
@@ -1001,40 +1020,49 @@ async function nfMatch(g) {
   if (g.kind === 'tv' && g.pick >= 0) await nfResolve(g);
 }
 async function nfResolve(g) {
-  const c = g.cands[g.pick]; g.resolved = []; g.unresolved = 0;
+  const c = g.cands[g.pick]; g.resolved = []; g.unresolved = 0; g.shifted = false;
   const d = await getDetails('tv', c.id); g.d = d;
   const seasons = (d.seasons || []).filter((s) => s.season_number > 0 && s.episode_count > 0).map((s) => s.season_number).slice(0, 40);
+  const maxS = Math.max(0, ...seasons);
+  // „Part N” de pe Netflix nu corespunde mereu cu sezoanele TMDB: aliniem de la ultimul sezon
+  const maxPart = Math.max(0, ...g.rows.filter((r) => r.part).map((r) => r.season));
+  const shift = maxPart > maxS && maxS ? maxS - maxPart : 0;
+  if (shift) g.shifted = true;
   const eps = {};
   const loadS = async (n) => {
     if (eps[n]) return; eps[n] = [];
     const [a, b] = await Promise.all([tmdb(`/tv/${c.id}/season/${n}`).catch(() => null), tmdb(`/tv/${c.id}/season/${n}`, { language: 'en-US' }).catch(() => null)]);
     const map = {};
-    for (const src of [a, b]) for (const e of (src && src.episodes) || []) (map[e.episode_number] = map[e.episode_number] || []).push(norm(e.name));
-    eps[n] = Object.entries(map).map(([e, names]) => ({ e: Number(e), names: names.filter(Boolean) }));
+    for (const src of [a, b]) for (const e of (src && src.episodes) || []) if (e.name) (map[e.episode_number] = map[e.episode_number] || []).push(e.name);
+    eps[n] = Object.entries(map).map(([e, names]) => ({ e: Number(e), n1: names.map(norm), n2: names.map(norm2) }));
   };
-  const find = (n, t) => {
-    const L = eps[n] || []; if (!t) return null;
-    return L.find((o) => o.names.includes(t)) || (t.length >= 5 ? L.find((o) => o.names.some((x) => x.length >= 5 && (x.includes(t) || t.includes(x)))) : null);
+  const find = (n, raw) => {
+    const L = eps[n] || [];
+    const segs = raw.split(/:\s+/);
+    const terms = [...new Set([raw, segs[segs.length - 1]].map(norm).filter(Boolean))];
+    for (const t of terms) { const x = L.find((o) => o.n1.includes(t)); if (x) return x; }
+    for (const t of terms.map(norm2)) { const x = t && L.find((o) => o.n2.includes(t)); if (x) return x; }
+    for (const t of terms) if (t.length >= 5) { const x = L.find((o) => o.n1.some((y) => y.length >= 5 && (y.includes(t) || t.includes(y)))); if (x) return x; }
+    return null;
   };
   const found = new Map(), pending = [];
   const hit = (s, e, date) => { const k = `${s}-${e}`, o = found.get(k); if (!o || (date && (!o.date || date > o.date))) found.set(k, { s, e, date }); };
   for (const r of g.rows) {
-    const t = norm(r.ep), num = (r.ep.match(EPNUM_RE) || [])[1];
-    if (r.season && seasons.includes(r.season)) {
-      if (num) { hit(r.season, +num, r.date); continue; }
-      await loadS(r.season); const x = find(r.season, t);
-      if (x) { hit(r.season, x.e, r.date); continue; }
+    const num = (r.ep.match(EPNUM_RE) || [])[1];
+    const sn = r.season ? Math.max(1, r.season + (r.part ? shift : 0)) : null;
+    if (sn && seasons.includes(sn)) {
+      await loadS(sn); const x = find(sn, r.ep);
+      if (x) { hit(sn, x.e, r.date); continue; }
+      if (num && (eps[sn].length === 0 || eps[sn].some((o) => o.e === +num))) { hit(sn, +num, r.date); continue; }
     }
-    pending.push({ r, t, num });
+    pending.push({ r, sn, num });
   }
-  if (pending.length) {
-    for (const n of seasons) await loadS(n);
-    for (const p of pending) {
-      let ok = false;
-      for (const n of seasons) { const x = find(n, p.t); if (x) { hit(n, x.e, p.r.date); ok = true; break; } }
-      if (!ok && p.num && seasons.length === 1) { hit(seasons[0], +p.num, p.r.date); ok = true; }
-      if (!ok) g.unresolved++;
-    }
+  for (const p of pending) {
+    const order = p.sn ? [...seasons].sort((a, b) => Math.abs(a - p.sn) - Math.abs(b - p.sn) || b - a) : seasons;
+    let ok = false;
+    for (const n of order) { await loadS(n); const x = find(n, p.r.ep); if (x) { hit(n, x.e, p.r.date); ok = true; break; } }
+    if (!ok && p.num && seasons.length === 1) { hit(seasons[0], +p.num, p.r.date); ok = true; }
+    if (!ok) g.unresolved++;
   }
   g.resolved = [...found.values()];
   if (!g.resolved.length) g.include = false;
@@ -1067,14 +1095,14 @@ async function nfAnalyze(rows) {
   if (!ctx || ctx.imp !== imp) return;
   imp.stage = 'review'; renderSheet();
 }
-const nfCheck = (g) => g.pick < 0 || !g.exact || g.unresolved > 0 || (g.kind === 'tv' && !g.resolved.length);
+const nfCheck = (g) => g.pick < 0 || !g.exact || g.unresolved > 0 || g.shifted || (g.kind === 'tv' && !g.resolved.length);
 function nfRow(g, i) {
   const c = g.pick >= 0 ? g.cands[g.pick] : null;
   const exists = c && db.items[`${g.kind}:${c.id}`];
   let sub;
   if (g.busy) sub = 'Se caută…';
   else if (g.kind === 'movie') sub = `Film${g.date ? ' · văzut ' + fmtDate(g.date) : ''}${g.dates.length > 1 ? ` · ${g.dates.length} vizionări` : ''}`;
-  else sub = `Serial · ${g.resolved.length} ${g.resolved.length === 1 ? 'episod' : 'episoade'}${g.unresolved ? ` · ${g.unresolved} nepotrivite` : ''}`;
+  else sub = `Serial · ${g.resolved.length} ${g.resolved.length === 1 ? 'episod' : 'episoade'}${g.unresolved ? ` · ${g.unresolved} nepotrivite` : ''}${g.shifted ? ' · verifică sezoanele' : ''}`;
   return `<div class="imp ${g.include ? '' : 'off'}">
     <button class="chk ${g.include ? 'on' : ''}" data-act="impToggle" data-i="${i}" ${c ? '' : 'disabled'}>✓</button>
     ${poster(c && c.poster_path, c ? (c.title || c.name) : g.name)}
