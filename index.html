@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Filme">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
 <title>Filmele mele</title>
 <style>
 :root{
@@ -162,6 +162,14 @@ input[type=date].field{width:100%;-webkit-appearance:none;min-height:44px}
 .panel h3{margin:0 0 6px;font-size:17px}
 .panel p{margin:0 0 12px;color:var(--mu);font-size:14px}
 .panel .row{margin-top:10px}
+.imp{display:flex;gap:10px;align-items:flex-start;padding:10px;background:var(--s1);border-radius:var(--r);margin:8px 0}
+.imp.off{opacity:.5}
+.imp .chk{margin-top:27px}
+.imp .poster{width:48px;height:72px}
+.sel{width:100%;padding:7px 10px;margin:4px 0 2px;font-weight:650;-webkit-appearance:none;appearance:none}
+.lnk{color:var(--gold);font-size:13px;font-weight:650;margin-top:6px}
+.foot{position:sticky;bottom:0;padding:14px 0 calc(8px + var(--safe-b));background:linear-gradient(rgba(20,17,28,0),var(--bg) 35%)}
+.btn[disabled]{opacity:.4}
 #toast{position:fixed;left:50%;bottom:calc(86px + var(--safe-b));transform:translate(-50%,20px);opacity:0;z-index:60;background:#f3eff8;color:#14111c;
   padding:10px 16px;border-radius:12px;font-size:14px;font-weight:600;transition:.25s;pointer-events:none;max-width:88vw;text-align:center}
 #toast.show{opacity:1;transform:translate(-50%,0)}
@@ -180,6 +188,7 @@ input[type=date].field{width:100%;-webkit-appearance:none;min-height:44px}
 
 <div id="sheet" aria-hidden="true"></div>
 <div id="toast"></div>
+<input type="file" id="nfFile" accept=".csv,text/csv,text/comma-separated-values,text/plain" style="position:absolute;width:1px;height:1px;opacity:0;left:-10px;top:0">
 <input type="file" id="restoreFile" accept="application/json,text/plain,.json,.txt" style="position:absolute;width:1px;height:1px;opacity:0;left:-10px;top:0">
 
 <script>
@@ -190,7 +199,7 @@ input[type=date].field{width:100%;-webkit-appearance:none;min-height:44px}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.1';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
@@ -332,9 +341,9 @@ function nextEp(it) {
   }
   return null;
 }
-function setEp(it, s, e, on) {
+function setEp(it, s, e, on, date) {
   it.eps = it.eps || {};
-  if (on) { (it.eps[s] = it.eps[s] || {})[e] = it.eps[s][e] || today(); it.lastWatchedAt = Date.now(); }
+  if (on) { (it.eps[s] = it.eps[s] || {})[e] = it.eps[s][e] || date || today(); it.lastWatchedAt = Date.now(); }
   else if (it.eps[s]) { delete it.eps[s][e]; if (!Object.keys(it.eps[s]).length) delete it.eps[s]; }
 }
 function autoTvStatus(it) {
@@ -557,6 +566,10 @@ V.settings = {
         <input class="field" style="width:100%" id="keyIn" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Lipește cheia aici" value="${esc(db.settings.tmdbKey)}">
         <div class="row"><button class="btn pri" data-act="saveKey">Salvează și verifică</button>${db.settings.tmdbKey ? `<button class="btn" data-act="clearKey">Șterge</button>` : ''}</div>
       </div>
+      <div class="panel"><h3>Import din Netflix</h3>
+        <p>Pe <b>netflix.com</b>, din browser: Account → profilul tău → <b>Viewing activity</b> → jos <b>„Download all”</b>. Apoi alege aici fișierul CSV descărcat.</p>
+        <button class="btn pri block" data-act="nfPick">Alege fișierul CSV</button>
+      </div>
       <div class="panel"><h3>Backup</h3>
         <p>Datele stau doar pe telefon. Fă backup des: apeși „Fă backup” → <b>Save to Files</b> → <b>iCloud Drive</b>.<br>
         ${lb ? `Ultimul backup: <b>${fmtDate(new Date(lb).toISOString().slice(0, 10))}</b>` : '<b>Nu ai făcut încă niciun backup.</b>'}</p>
@@ -640,6 +653,7 @@ function sheetItem() { // elementul din listă sau o versiune temporară (nesalv
 }
 function renderSheet() {
   if (!ctx) return;
+  if (ctx.imp) return renderImport();
   const el = $('#sheet'), y = el.scrollTop;
   const { it, saved, partial } = sheetItem();
   if (!it) { el.innerHTML = `<div class="hero"><button class="close" data-act="close">✕</button></div><div class="body"><div class="spin">${ctx.err ? esc(ctx.err) : 'Se încarcă…'}</div></div>`; return; }
@@ -838,6 +852,17 @@ const A = {
   },
   clearKey() { db.settings.tmdbKey = ''; save(); ui.sRes = null; renderList(); toast('Cheie ștearsă'); },
   backup() { doBackup(); },
+  nfPick() { if (!db.settings.tmdbKey) return toast('Adaugă întâi cheia TMDB'); $('#nfFile').value = ''; $('#nfFile').click(); },
+  impProfile(a) { const imp = ctx.imp; imp.rows = imp.rows.filter((r) => r.profile === a.p); imp.stage = 'analyzing'; renderSheet(); nfAnalyze(imp.rows); },
+  impFilter(a) { ctx.imp.filter = a.f; renderSheet(); },
+  impToggle(a) { const g = ctx.imp.groups[a.i]; if (g.pick < 0) return; g.include = !g.include; renderSheet(); },
+  async impSearch(a) {
+    const g = ctx.imp.groups[a.i]; const q = prompt('Caută în TMDB:', g.query || g.name); if (!q) return;
+    g.query = q.trim(); g.busy = true; renderSheet();
+    try { await nfMatch(g); if (g.cands.length) g.include = g.kind === 'movie' || g.resolved.length > 0; } catch (e) { toast(errMsg(e)); }
+    g.busy = false; if (ctx && ctx.imp) renderSheet();
+  },
+  impGo() { if (confirm('Imporți titlurile selectate?')) nfImport(); },
   restore() { $('#restoreFile').value = ''; $('#restoreFile').click(); },
   wipe() {
     if (!confirm('Ștergi TOATE filmele și serialele de pe acest telefon?')) return;
@@ -879,6 +904,245 @@ $('#restoreFile').addEventListener('change', async (e) => {
   } catch (err) { toast('Fișierul nu e un backup valid'); }
 });
 
+/* ---------- import din Netflix ---------- */
+const norm = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+function parseCSV(text) {
+  text = text.replace(/^﻿/, '');
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { row.push(f); f = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; }
+    else f += c;
+  }
+  if (f || row.length) { row.push(f); rows.push(row); }
+  return rows.filter((r) => r.some((x) => x.trim()));
+}
+function detectDateFmt(list) {
+  let dm = 0, md = 0;
+  for (const s of list) { const m = s.trim().match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/); if (!m) continue; if (+m[1] > 12) dm++; if (+m[2] > 12) md++; }
+  return md > dm ? 'md' : 'dm';
+}
+function parseDate(s, fmt) {
+  s = (s || '').trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/); if (!m) return null;
+  let a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
+  const [d, mo] = fmt === 'md' ? [b, a] : [a, b];
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return `${y}-${pad(mo)}-${pad(d)}`;
+}
+const SEASON_RE = /^(?:season|sezonul|sezon|series|part|partea|volume|volumul|vol\.?|book|cartea|collection|colec[tţț]ia)\s*(\d+)$/i;
+const LIMITED_RE = /^(?:limited series|miniseries|mini-series|miniserie|miniseria|serie limitat[aă]|serial limitat)$/i;
+const EPNUM_RE = /^(?:episode|episodul|episod|ep\.?)\s*(\d+)\b/i;
+function parseTitle(t) {
+  const parts = t.split(/:\s+/).map((s) => s.trim());
+  for (let i = 1; i < parts.length - 1; i++) { // trebuie să existe și titlul episodului după sezon
+    const m = parts[i].match(SEASON_RE);
+    if (m) return { show: parts.slice(0, i).join(': '), season: +m[1], ep: parts.slice(i + 1).join(': ') };
+    if (LIMITED_RE.test(parts[i])) return { show: parts.slice(0, i).join(': '), season: 1, ep: parts.slice(i + 1).join(': ') };
+  }
+  return { parts };
+}
+function nfParse(text) {
+  const rows = parseCSV(text); if (!rows.length) throw new Error('empty');
+  const h = rows[0].map(norm);
+  let ti = h.findIndex((x) => x === 'title' || x === 'titlu' || x === 'titel' || x === 'titre');
+  let di = h.findIndex((x) => x === 'date' || x === 'data' || x === 'datum' || x === 'start time');
+  const pi = h.indexOf('profile name'), si = h.indexOf('supplemental video type'), du = h.indexOf('duration');
+  let body = rows.slice(1);
+  if (ti < 0) { if (rows[0].length >= 2 && /\d/.test(rows[0][1])) { ti = 0; di = 1; body = rows; } else { ti = 0; di = 1; } }
+  if (di < 0) di = ti === 0 ? 1 : 0;
+  const fmt = detectDateFmt(body.map((r) => r[di] || ''));
+  const out = [];
+  for (const r of body) {
+    const title = (r[ti] || '').trim(); if (!title) continue;
+    if (si >= 0 && (r[si] || '').trim()) continue; // trailere, previzualizări
+    if (du >= 0) { const p = (r[du] || '').split(':').map(Number); if (p.length === 3 && p[0] * 3600 + p[1] * 60 + p[2] < 300) continue; }
+    out.push({ title, date: parseDate(r[di], fmt), profile: pi >= 0 ? (r[pi] || '').trim() : '' });
+  }
+  return out;
+}
+function nfGroup(rows) {
+  const tv = new Map(), mv = new Map(), amb = new Map();
+  const addMovie = (r) => { const g = mv.get(r.title) || { kind: 'movie', name: r.title, dates: [] }; if (r.date) g.dates.push(r.date); mv.set(r.title, g); };
+  const tvRow = (k, season, ep, date) => { const g = tv.get(k) || { kind: 'tv', name: k, rows: [] }; g.rows.push({ season, ep, date }); tv.set(k, g); };
+  for (const r of rows) {
+    const p = parseTitle(r.title);
+    if (p.show) tvRow(p.show, p.season, p.ep, r.date);
+    else if (p.parts.length >= 2) { const k = p.parts[0]; if (!amb.has(k)) amb.set(k, []); amb.get(k).push(r); }
+    else addMovie(r);
+  }
+  for (const [k, list] of amb) {
+    const distinct = new Set(list.map((r) => r.title));
+    if (tv.has(k) || distinct.size >= 2) list.forEach((r) => tvRow(k, null, r.title.slice(k.length).replace(/^:\s*/, ''), r.date));
+    else list.forEach(addMovie);
+  }
+  const last = (a) => a.filter(Boolean).sort().pop() || null;
+  const out = [...tv.values(), ...mv.values()].map((g) => ({ ...g, date: last(g.kind === 'tv' ? g.rows.map((r) => r.date) : g.dates),
+    cands: [], pick: -1, include: false, exact: false, resolved: [], unresolved: 0, busy: false, d: null }));
+  out.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'tv' ? -1 : 1) || (b.date || '').localeCompare(a.date || ''));
+  return out;
+}
+async function nfMatch(g) {
+  const q = g.query || g.name;
+  let res = (await tmdb(g.kind === 'movie' ? '/search/movie' : '/search/tv', { query: q, include_adult: 'false' })).results || [];
+  if (!res.length && g.kind === 'movie' && !g.query && q.includes(': ')) { // poate e un singur episod dintr-un serial
+    const show = q.split(/:\s+/)[0];
+    const tvr = (await tmdb('/search/tv', { query: show, include_adult: 'false' })).results || [];
+    if (tvr.length) { Object.assign(g, { kind: 'tv', name: show, rows: g.dates.map((d) => ({ season: null, ep: q.slice(show.length).replace(/^:\s*/, ''), date: d })) }); res = tvr; }
+  }
+  g.cands = res.slice(0, 6);
+  const n = norm(q);
+  const i = g.cands.findIndex((c) => norm(c.title || c.name) === n || norm(c.original_title || c.original_name) === n);
+  g.exact = i >= 0; g.pick = g.cands.length ? Math.max(0, i) : -1; g.include = g.pick >= 0;
+  if (g.kind === 'tv' && g.pick >= 0) await nfResolve(g);
+}
+async function nfResolve(g) {
+  const c = g.cands[g.pick]; g.resolved = []; g.unresolved = 0;
+  const d = await getDetails('tv', c.id); g.d = d;
+  const seasons = (d.seasons || []).filter((s) => s.season_number > 0 && s.episode_count > 0).map((s) => s.season_number).slice(0, 40);
+  const eps = {};
+  const loadS = async (n) => {
+    if (eps[n]) return; eps[n] = [];
+    const [a, b] = await Promise.all([tmdb(`/tv/${c.id}/season/${n}`).catch(() => null), tmdb(`/tv/${c.id}/season/${n}`, { language: 'en-US' }).catch(() => null)]);
+    const map = {};
+    for (const src of [a, b]) for (const e of (src && src.episodes) || []) (map[e.episode_number] = map[e.episode_number] || []).push(norm(e.name));
+    eps[n] = Object.entries(map).map(([e, names]) => ({ e: Number(e), names: names.filter(Boolean) }));
+  };
+  const find = (n, t) => {
+    const L = eps[n] || []; if (!t) return null;
+    return L.find((o) => o.names.includes(t)) || (t.length >= 5 ? L.find((o) => o.names.some((x) => x.length >= 5 && (x.includes(t) || t.includes(x)))) : null);
+  };
+  const found = new Map(), pending = [];
+  const hit = (s, e, date) => { const k = `${s}-${e}`, o = found.get(k); if (!o || (date && (!o.date || date > o.date))) found.set(k, { s, e, date }); };
+  for (const r of g.rows) {
+    const t = norm(r.ep), num = (r.ep.match(EPNUM_RE) || [])[1];
+    if (r.season && seasons.includes(r.season)) {
+      if (num) { hit(r.season, +num, r.date); continue; }
+      await loadS(r.season); const x = find(r.season, t);
+      if (x) { hit(r.season, x.e, r.date); continue; }
+    }
+    pending.push({ r, t, num });
+  }
+  if (pending.length) {
+    for (const n of seasons) await loadS(n);
+    for (const p of pending) {
+      let ok = false;
+      for (const n of seasons) { const x = find(n, p.t); if (x) { hit(n, x.e, p.r.date); ok = true; break; } }
+      if (!ok && p.num && seasons.length === 1) { hit(seasons[0], +p.num, p.r.date); ok = true; }
+      if (!ok) g.unresolved++;
+    }
+  }
+  g.resolved = [...found.values()];
+  if (!g.resolved.length) g.include = false;
+}
+async function pool(list, n, fn) {
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, list.length) }, async () => {
+    while (i < list.length) { const x = list[i++]; await fn(x); }
+  }));
+}
+function nfStart(text) {
+  let rows;
+  try { rows = nfParse(text); } catch (e) { return toast('Nu am putut citi fișierul CSV'); }
+  if (!rows.length) return toast('Fișierul nu conține titluri');
+  const profiles = [...new Set(rows.map((r) => r.profile).filter(Boolean))];
+  ctx = { imp: { stage: profiles.length > 1 ? 'profiles' : 'analyzing', rows, profiles, groups: [], done: 0, total: 0, filter: 'all' } };
+  showSheet(); renderSheet();
+  if (profiles.length <= 1) nfAnalyze(rows);
+}
+async function nfAnalyze(rows) {
+  const imp = ctx.imp;
+  try { await tmdb('/configuration'); } catch (e) { imp.stage = 'error'; imp.err = errMsg(e); return renderSheet(); }
+  imp.groups = nfGroup(rows); imp.total = imp.groups.length; imp.done = 0; imp.stage = 'analyzing'; renderSheet();
+  let last = 0;
+  await pool(imp.groups, 4, async (g) => {
+    try { await nfMatch(g); } catch (e) { g.err = e.message; }
+    imp.done++;
+    if (Date.now() - last > 150) { last = Date.now(); if (ctx && ctx.imp === imp) renderSheet(); }
+  });
+  if (!ctx || ctx.imp !== imp) return;
+  imp.stage = 'review'; renderSheet();
+}
+const nfCheck = (g) => g.pick < 0 || !g.exact || g.unresolved > 0 || (g.kind === 'tv' && !g.resolved.length);
+function nfRow(g, i) {
+  const c = g.pick >= 0 ? g.cands[g.pick] : null;
+  const exists = c && db.items[`${g.kind}:${c.id}`];
+  let sub;
+  if (g.busy) sub = 'Se caută…';
+  else if (g.kind === 'movie') sub = `Film${g.date ? ' · văzut ' + fmtDate(g.date) : ''}${g.dates.length > 1 ? ` · ${g.dates.length} vizionări` : ''}`;
+  else sub = `Serial · ${g.resolved.length} ${g.resolved.length === 1 ? 'episod' : 'episoade'}${g.unresolved ? ` · ${g.unresolved} nepotrivite` : ''}`;
+  return `<div class="imp ${g.include ? '' : 'off'}">
+    <button class="chk ${g.include ? 'on' : ''}" data-act="impToggle" data-i="${i}" ${c ? '' : 'disabled'}>✓</button>
+    ${poster(c && c.poster_path, c ? (c.title || c.name) : g.name)}
+    <div class="meta"><div class="small">Netflix: ${esc(g.name)}</div>
+      ${c ? `<select class="field sel" data-in="impPick" data-i="${i}">${g.cands.map((x, j) => `<option value="${j}"${j === g.pick ? ' selected' : ''}>${esc(x.title || x.name)} (${(x.release_date || x.first_air_date || '').slice(0, 4) || '?'})</option>`).join('')}</select>`
+          : `<div class="t" style="margin:3px 0">Negăsit în TMDB</div>`}
+      <div class="sub">${sub}${exists ? ' · deja în listă' : ''}</div>
+      <button class="lnk" data-act="impSearch" data-i="${i}">Caută alt titlu</button></div></div>`;
+}
+function renderImport() {
+  const imp = ctx.imp, el = $('#sheet'), y = el.scrollTop;
+  let h = `<div class="top"><button class="close" style="position:static;margin-bottom:10px" data-act="close">✕</button><h1>Import Netflix</h1>`;
+  if (imp.stage === 'review') {
+    const nCheck = imp.groups.filter(nfCheck).length;
+    h += `<div class="seg"><button class="${imp.filter === 'all' ? 'on' : ''}" data-act="impFilter" data-f="all">Toate<span class="n">${imp.groups.length}</span></button>
+      <button class="${imp.filter === 'check' ? 'on' : ''}" data-act="impFilter" data-f="check">De verificat<span class="n">${nCheck}</span></button></div>`;
+  }
+  h += `</div><div class="body">`;
+  if (imp.stage === 'profiles') {
+    h += `<p class="muted">Fișierul are mai multe profiluri. Pe care îl imporți?</p>${imp.profiles.map((p) => `<button class="btn block" style="margin:8px 0" data-act="impProfile" data-p="${esc(p)}">${esc(p)}</button>`).join('')}`;
+  } else if (imp.stage === 'error') {
+    h += `<div class="empty">${esc(imp.err)}</div>`;
+  } else if (imp.stage === 'analyzing' || imp.stage === 'importing') {
+    const pct = imp.total ? Math.round(imp.done / imp.total * 100) : 0;
+    h += `<p class="muted">${imp.stage === 'analyzing' ? `Caut titlurile în TMDB… (${imp.rows.length} vizionări din Netflix)` : 'Import…'}</p>
+      <div class="bar" style="height:8px"><i style="width:${pct}%"></i></div><p class="small">${imp.done} / ${imp.total} titluri</p>`;
+  } else if (imp.stage === 'review') {
+    const sel = imp.groups.filter((g) => g.include);
+    h += `<p class="muted" style="margin-top:0">Verifică potrivirile. Poți alege alt titlu din listă sau debifa ce nu vrei. Netflix trece în istoric și ce ai doar început.</p>`;
+    const list = imp.groups.map((g, i) => [g, i]).filter(([g]) => imp.filter === 'all' || nfCheck(g));
+    h += list.length ? list.map(([g, i]) => nfRow(g, i)).join('') : `<div class="empty">Nimic de verificat 👌</div>`;
+    h += `<div class="foot"><button class="btn pri block" data-act="impGo" ${sel.length ? '' : 'disabled'}>Importă ${sel.length} ${sel.length === 1 ? 'titlu' : 'titluri'}</button></div>`;
+  } else if (imp.stage === 'done') {
+    h += `<div class="empty"><b>Import terminat ✓</b>${imp.sum}<br><br><button class="btn pri" data-act="close">Gata</button></div>`;
+  }
+  h += `</div>`;
+  el.innerHTML = h; el.scrollTop = y;
+}
+async function nfImport() {
+  const imp = ctx.imp;
+  const sel = imp.groups.filter((g) => g.include && g.pick >= 0 && (g.kind === 'movie' || g.resolved.length));
+  imp.stage = 'importing'; imp.done = 0; imp.total = sel.length; renderSheet();
+  let mv = 0, tvN = 0, eps = 0;
+  await pool(sel, 4, async (g) => {
+    const c = g.cands[g.pick], key = `${g.kind}:${c.id}`;
+    let d = g.d && g.d.id === c.id ? g.d : null;
+    if (!d) { try { d = await getDetails(g.kind, c.id); } catch (e) { d = c; } }
+    if (g.kind === 'movie') {
+      let it = db.items[key];
+      if (!it) { it = movieFrom(d, 'watched'); it.watchedOn = g.date; db.items[key] = it; }
+      else if (it.status !== 'watched') { it.status = 'watched'; it.watchedOn = g.date || today(); }
+      else if (g.date && (!it.watchedOn || g.date > it.watchedOn)) it.watchedOn = g.date;
+      touch(it); mv++;
+    } else {
+      const it = db.items[key] || (db.items[key] = tvFrom(d, 'watchlist'));
+      const prev = it.lastWatchedAt || 0;
+      for (const r of g.resolved) if (!isW(it, r.s, r.e)) { setEp(it, r.s, r.e, true, r.date); eps++; }
+      it.lastWatchedAt = Math.max(prev, ...g.resolved.map((r) => (r.date ? Date.parse(r.date) : 0)));
+      autoTvStatus(it); touch(it); tvN++;
+    }
+    imp.done++; renderSheet();
+  });
+  save();
+  const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  imp.sum = `Am importat ${pl(mv, 'film', 'filme')} și ${pl(tvN, 'serial', 'seriale')} (${pl(eps, 'episod nou', 'episoade noi')}).<br>Nu uita să faci un backup.`;
+  imp.stage = 'done'; renderSheet();
+}
+
 /* ---------- evenimente ---------- */
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]'); if (!el) return;
@@ -900,7 +1164,13 @@ document.addEventListener('change', (e) => {
   if (k === 'sort') { ui.sort = e.target.value; renderList(); }
   else if (k === 'date') { const it = curItem(); if (it) { it.watchedOn = e.target.value || null; touch(it); save(); } }
   else if (k === 'note') save();
+  else if (k === 'impPick' && ctx && ctx.imp) {
+    const g = ctx.imp.groups[e.target.dataset.i]; g.pick = Number(e.target.value); g.exact = true; g.include = true;
+    if (g.kind === 'tv') { g.busy = true; renderSheet(); nfResolve(g).catch((er) => toast(errMsg(er))).finally(() => { g.busy = false; if (ctx && ctx.imp) renderSheet(); }); }
+    else renderSheet();
+  }
 });
+$('#nfFile').addEventListener('change', async (e) => { const f = e.target.files[0]; if (f) nfStart(await f.text()); });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && e.target.dataset && e.target.dataset.in === 'sq') { e.target.blur(); runSearch(0); }
   if (e.key === 'Escape' && ctx) closeSheet();
