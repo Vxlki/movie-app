@@ -77,6 +77,7 @@ select.field{flex:0 0 auto;-webkit-appearance:none;appearance:none;padding-right
 .banner .x{color:var(--mu);padding:4px 6px;font-size:18px}
 
 /* search grid */
+.more{text-align:center;margin:20px 0 0}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 10px;margin-top:12px}
 .tile{text-align:left;position:relative;cursor:pointer}
 .tile .poster{width:100%;height:auto;aspect-ratio:2/3;border-radius:10px}
@@ -221,7 +222,7 @@ input[type=date].field{width:100%;-webkit-appearance:none;min-height:44px}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
@@ -498,41 +499,70 @@ V.search = {
     const res = ui.sRes || [];
     const title = ui.sq.trim() ? '' : `<div class="group">Populare săptămâna asta</div>`;
     if (!res.length && ui.sRes) return `<div class="wrap"><div class="empty">Niciun rezultat pentru „${esc(ui.sq)}”.</div>${manual}</div>`;
-    return `<div class="wrap">${title}<div class="grid">${res.map((r) => {
-      const type = r.media_type, key = `${type}:${r.id}`, it = db.items[key];
-      const t = r.title || r.name, y = (r.release_date || r.first_air_date || '').slice(0, 4);
-      const tag = it ? `<span class="tag in">${esc((type === 'movie' ? MOVIE_ST : TV_ST)[it.status])}</span>` : (ui.sType === 'all' ? `<span class="tag">${type === 'movie' ? 'Film' : 'Serial'}</span>` : '');
-      return `<div class="tile" data-act="openT" data-type="${type}" data-id="${r.id}">${tag}${poster(r.poster_path, t, '', 'w342')}<div class="tt">${esc(t)}</div><div class="ty">${y}</div></div>`;
-    }).join('')}</div>${manual}</div>`;
+    return `<div class="wrap">${title}<div class="grid">${res.map(tileHtml).join('')}</div>${moreHtml()}${manual}</div>`;
   }
 };
+function tileHtml(r) {
+  const type = r.media_type, key = `${type}:${r.id}`, it = db.items[key];
+  const t = r.title || r.name, y = (r.release_date || r.first_air_date || '').slice(0, 4);
+  const tag = it ? `<span class="tag in">${esc((type === 'movie' ? MOVIE_ST : TV_ST)[it.status])}</span>` : (ui.sType === 'all' ? `<span class="tag">${type === 'movie' ? 'Film' : 'Serial'}</span>` : '');
+  return `<div class="tile" data-act="openT" data-type="${type}" data-id="${r.id}">${tag}${poster(r.poster_path, t, '', 'w342')}<div class="tt">${esc(t)}</div><div class="ty">${y}</div></div>`;
+}
+function moreHtml() {
+  if (!ui.sRes || ui.sPage >= ui.sTotal) return '';
+  return `<div id="more" class="more">${ui.sMore ? '<div class="spin">Se încarcă…</div>'
+    : `<button class="btn" data-act="sMore">${ui.sMoreErr ? 'Reîncearcă' : 'Încarcă mai multe'}</button>`}</div>`;
+}
+async function fetchSearch(page) {
+  const q = ui.sq.trim(), t = ui.sType;
+  let j;
+  if (!q) j = await tmdb(`/trending/${t}/week`, { page });
+  else if (t === 'all') j = await tmdb('/search/multi', { query: q, include_adult: 'false', page });
+  else j = await tmdb(`/search/${t}`, { query: q, include_adult: 'false', page });
+  const res = (j.results || []).map((r) => ({ ...r, media_type: r.media_type || t })).filter((r) => r.media_type === 'movie' || r.media_type === 'tv');
+  res.forEach((r) => searchPreview.set(`${r.media_type}:${r.id}`, r));
+  return { res, total: Math.min(j.total_pages || 1, 500) };
+}
 let sTimer, sSeq = 0;
 function runSearch(delay = 350) {
   clearTimeout(sTimer);
   sTimer = setTimeout(async () => {
     if (!db.settings.tmdbKey) return;
-    const seq = ++sSeq, q = ui.sq.trim(), t = ui.sType;
-    ui.sLoading = true; ui.sErr = '';
+    const seq = ++sSeq;
+    ui.sLoading = true; ui.sErr = ''; ui.sMore = false; ui.sMoreErr = false;
     try {
-      let res;
-      if (!q) {
-        const j = await tmdb(`/trending/${t}/week`);
-        res = j.results.map((r) => ({ ...r, media_type: r.media_type || t }));
-      } else if (t === 'all') {
-        const j = await tmdb('/search/multi', { query: q, include_adult: 'false' });
-        res = j.results;
-      } else {
-        const j = await tmdb(`/search/${t}`, { query: q, include_adult: 'false' });
-        res = j.results.map((r) => ({ ...r, media_type: t }));
-      }
+      const { res, total } = await fetchSearch(1);
       if (seq !== sSeq) return;
-      ui.sRes = res.filter((r) => r.media_type === 'movie' || r.media_type === 'tv');
-      ui.sRes.forEach((r) => searchPreview.set(`${r.media_type}:${r.id}`, r));
+      ui.sRes = res; ui.sPage = 1; ui.sTotal = total;
     } catch (e) { if (seq !== sSeq) return; ui.sErr = errMsg(e); ui.sRes = null; }
     ui.sLoading = false;
-    if (ui.tab === 'search') renderList();
+    if (ui.tab === 'search') { renderList(); window.scrollTo(0, 0); }
   }, delay);
 }
+// încărcare automată când ajungi aproape de final (plus buton, ca rezervă)
+async function loadMore() {
+  if (ui.tab !== 'search' || ui.sMore || !ui.sRes || ui.sPage >= ui.sTotal) return;
+  const seq = sSeq; ui.sMore = true; ui.sMoreErr = false; updateMore();
+  try {
+    const { res, total } = await fetchSearch(ui.sPage + 1);
+    if (seq !== sSeq) return;
+    const have = new Set(ui.sRes.map((r) => `${r.media_type}:${r.id}`));
+    const fresh = res.filter((r) => !have.has(`${r.media_type}:${r.id}`));
+    ui.sRes.push(...fresh); ui.sPage++; ui.sTotal = total;
+    const grid = $('#list .grid'); if (grid) grid.insertAdjacentHTML('beforeend', fresh.map(tileHtml).join(''));
+  } catch (e) { if (seq === sSeq) ui.sMoreErr = true; }
+  if (seq !== sSeq) return;
+  ui.sMore = false; updateMore();
+  if (!ui.sMoreErr) setTimeout(() => { const m = $('#more'); if (m && m.getBoundingClientRect().top < innerHeight + 800) loadMore(); }, 50);
+}
+function updateMore() {
+  const m = $('#more'), html = moreHtml();
+  if (m) { if (html) m.outerHTML = html; else m.remove(); }
+  observeMore();
+}
+const moreObs = 'IntersectionObserver' in window
+  ? new IntersectionObserver((en) => { if (en.some((x) => x.isIntersecting)) loadMore(); }, { rootMargin: '0px 0px 800px 0px' }) : null;
+function observeMore() { if (!moreObs) return; moreObs.disconnect(); const m = $('#more'); if (m && !ui.sMoreErr) moreObs.observe(m); }
 
 /* ---------- ecran: Statistici ---------- */
 V.stats = {
@@ -615,8 +645,9 @@ function renderView() {
   const v = V[ui.tab];
   $('#view').innerHTML = v.head() + `<div id="list">${v.list()}</div>`;
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === ui.tab));
+  if (ui.tab === 'search') observeMore();
 }
-function renderList() { const l = $('#list'); if (l) l.innerHTML = V[ui.tab].list(); }
+function renderList() { const l = $('#list'); if (l) l.innerHTML = V[ui.tab].list(); if (ui.tab === 'search') observeMore(); }
 function renderHeadCounts() { // actualizează contoarele fără să pierdem focusul
   if (ui.tab === 'movies' || ui.tab === 'tv') {
     const seg = $('.top .seg'); if (!seg) return;
@@ -836,6 +867,7 @@ const A = {
   mSeg(a) { ui.mSeg = a.seg; renderView(); },
   tSeg(a) { ui.tSeg = a.seg; renderView(); },
   sType(a) { ui.sType = a.t; ui.sRes = null; renderView(); runSearch(0); },
+  sMore() { loadMore(); },
   open(a) { openItem(a.key); },
   openT(a) { openDetail(a.type, a.id); },
   close() { closeSheet(); },
