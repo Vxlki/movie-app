@@ -1,10 +1,11 @@
 // Service worker: face aplicația să meargă offline.
 // Când modifici index.html, crește VERSION ca telefonul să ia versiunea nouă.
-const VERSION = 'filme-v3';
+const VERSION = 'filme-v4';
 const SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './secrete.txt',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png'
