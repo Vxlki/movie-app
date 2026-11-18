@@ -1,6 +1,9 @@
-// Service worker: face aplicația să meargă offline.
-// Când modifici index.html, crește VERSION ca telefonul să ia versiunea nouă.
-const VERSION = 'filme-v6';
+// Service worker: face aplicația să meargă offline și să ia rapid versiunile noi.
+// - index.html, secrete.txt, manifest: întâi de pe internet (fără cache-ul browserului),
+//   iar dacă nu e internet sau răspunsul întârzie peste 4 secunde, din cache.
+// - iconițe: din cache.  - postere: din cache, descărcate o singură dată.
+// Când modifici fișierele, poți crește VERSION (curăță cache-ul vechi).
+const VERSION = 'filme-v7';
 const SHELL = [
   './',
   './index.html',
@@ -11,9 +14,14 @@ const SHELL = [
   './icons/apple-touch-icon.png'
 ];
 const POSTERS = 'filme-postere';
+const FRESH = /(\/|\.html|\.txt|\.webmanifest)$/; // fișiere care trebuie să fie mereu la zi
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(VERSION)
+      .then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -23,6 +31,10 @@ self.addEventListener('activate', (e) => {
       .then(() => self.clients.claim())
   );
 });
+
+function withTimeout(p, ms) {
+  return new Promise((ok, fail) => { const t = setTimeout(() => fail(new Error('timeout')), ms); p.then((v) => { clearTimeout(t); ok(v); }, (er) => { clearTimeout(t); fail(er); }); });
+}
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
@@ -50,17 +62,35 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Fișierele aplicației: răspundem imediat din cache și actualizăm în fundal
-  if (url.origin === self.location.origin) {
+  if (url.origin !== self.location.origin) return;
+  const isPage = req.mode === 'navigate';
+  const key = isPage ? './index.html' : url.pathname.endsWith('/') ? './index.html' : req;
+
+  // Pagina și textele: întâi rețeaua (fără cache HTTP), cu rezervă din cache
+  if (isPage || FRESH.test(url.pathname)) {
     e.respondWith(
       caches.open(VERSION).then(async (c) => {
-        const key = req.mode === 'navigate' ? './index.html' : req;
-        const hit = await c.match(key);
-        const net = fetch(req)
-          .then((res) => { if (res.ok) c.put(key, res.clone()); return res; })
-          .catch(() => null);
-        return hit || (await net) || new Response('Offline', { status: 503 });
+        const net = fetch(isPage ? url.href.split('#')[0] : req, { cache: 'no-cache', credentials: 'same-origin' })
+          .then((res) => { if (res.ok) c.put(key, res.clone()); return res; });
+        try { return await withTimeout(net, 4000); }
+        catch (err) {
+          const hit = await c.match(key);
+          if (hit) return hit;
+          try { return await net; } catch (er) { return new Response('Offline', { status: 503 }); }
+        }
       })
     );
+    return;
   }
+
+  // Restul (iconițe): din cache, altfel de pe internet
+  e.respondWith(
+    caches.open(VERSION).then(async (c) => {
+      const hit = await c.match(req);
+      if (hit) return hit;
+      const res = await fetch(req);
+      if (res.ok) c.put(req, res.clone());
+      return res;
+    })
+  );
 });

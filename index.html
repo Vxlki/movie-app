@@ -222,11 +222,14 @@ input[type=date].field{width:100%;-webkit-appearance:none;min-height:44px}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '1.5';
+const APP_VERSION = '1.7';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
 const BACKUP_DAYS = 7;
+// limba titlurilor și descrierilor (căutarea găsește oricum în orice limbă)
+const LANG = () => db.settings.lang || 'en-US';
+const ALT_LANG = () => (LANG() === 'en-US' ? 'ro-RO' : 'en-US');
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -259,7 +262,7 @@ async function tmdb(path, params = {}) {
   const key = (db.settings.tmdbKey || '').trim();
   if (!key) throw new Error('NOKEY');
   const u = new URL(TMDB + path);
-  u.searchParams.set('language', 'ro-RO');
+  u.searchParams.set('language', LANG());
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
   const opt = { headers: { accept: 'application/json' } };
   if (key.length > 60) opt.headers.Authorization = 'Bearer ' + key; // API Read Access Token
@@ -274,11 +277,13 @@ async function tmdb(path, params = {}) {
   return j;
 }
 async function getDetails(type, id) {
-  const d = await tmdb(`/${type}/${id}`);
-  if (!d.overview) {
-    try { const en = await tmdb(`/${type}/${id}`, { language: 'en-US' }); d.overview = en.overview || ''; } catch (e) {}
+  const [d, alt] = await Promise.all([tmdb(`/${type}/${id}`), tmdb(`/${type}/${id}`, { language: ALT_LANG() }).catch(() => null)]);
+  const r = { ...d };
+  if (alt) {
+    r._alt = alt.title || alt.name || '';
+    if (!r.overview) r.overview = alt.overview || '';
   }
-  return d;
+  return r;
 }
 function errMsg(e) {
   if (!navigator.onLine) return 'Ești offline.';
@@ -304,6 +309,7 @@ function applyMovieMeta(it, d) {
     poster: d.poster_path || it.poster, backdrop: d.backdrop_path || it.backdrop,
     overview: d.overview || it.overview, runtime: d.runtime || it.runtime || null
   });
+  if (d._alt !== undefined) it.altTitle = d._alt && d._alt !== it.title ? d._alt : '';
   if (d.genres && d.genres.length) it.genres = d.genres.map((g) => g.name);
 }
 function applyTvMeta(it, d) {
@@ -312,6 +318,7 @@ function applyTvMeta(it, d) {
     poster: d.poster_path || it.poster, backdrop: d.backdrop_path || it.backdrop,
     overview: d.overview || it.overview, showStatus: d.status || it.showStatus || ''
   });
+  if (d._alt !== undefined) it.altTitle = d._alt && d._alt !== it.title ? d._alt : '';
   if (d.genres && d.genres.length) it.genres = d.genres.map((g) => g.name);
   if (d.seasons) it.seasons = d.seasons.filter((s) => s.season_number > 0 && s.episode_count > 0)
     .map((s) => ({ n: s.season_number, count: s.episode_count, name: s.name, air: s.air_date || null }));
@@ -404,7 +411,7 @@ function backupBanner() {
 }
 function matches(it) {
   const q = ui.filter.trim().toLowerCase(); if (!q) return true;
-  return (it.title + ' ' + (it.originalTitle || '')).toLowerCase().includes(q);
+  return norm(it.title + ' ' + (it.originalTitle || '') + ' ' + (it.altTitle || '')).includes(norm(q));
 }
 function sorter(kind) {
   if (ui.sort === 'rating') return (a, b) => (b.rating || 0) - (a.rating || 0) || a.title.localeCompare(b.title, 'ro');
@@ -620,6 +627,10 @@ V.settings = {
         <input class="field" style="width:100%" id="keyIn" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Lipește cheia aici" value="${esc(db.settings.tmdbKey)}">
         <div class="row"><button class="btn pri" data-act="saveKey">Salvează și verifică</button>${db.settings.tmdbKey ? `<button class="btn" data-act="clearKey">Șterge</button>` : ''}</div>
       </div>
+      <div class="panel"><h3>Limba titlurilor</h3>
+        <p>Căutarea găsește filmele oricum, după titlul în engleză, română sau original. Aici alegi doar în ce limbă se afișează titlurile și descrierile. Pe pagina filmului vezi și titlul în cealaltă limbă.</p>
+        <div class="chips">${[['en-US', 'Engleză'], ['ro-RO', 'Română']].map(([k, l]) => `<button class="${LANG() === k ? 'on' : ''}" data-act="setLang" data-l="${k}">${l}</button>`).join('')}</div>
+      </div>
       <div class="panel"><h3>Import din Netflix</h3>
         <p>Pe <b>netflix.com</b>, din browser: Account → profilul tău → <b>Viewing activity</b> → jos <b>„Download all”</b>. Apoi alege aici fișierul CSV descărcat.</p>
         <button class="btn pri block" data-act="nfPick">Alege fișierul CSV</button>
@@ -675,6 +686,7 @@ function closeSheet(mode, fromPop) {
   setTimeout(() => { if (!s.classList.contains('open')) { s.style.transition = 'none'; s.style.transform = ''; if (!ctx) s.innerHTML = ''; } }, 320);
   if (!fromPop && history.state && history.state.sheet) { try { history.back(); } catch (e) {} }
   refresh();
+  if (pendingReload) setTimeout(applyUpdate, 350);
 }
 window.addEventListener('popstate', () => closeSheet(null, true)); // butonul „înapoi” al sistemului / browserului
 (() => { // gesturi: tragi în jos de sus sau glisezi de la marginea stângă ca să revii
@@ -760,7 +772,7 @@ function renderSheet() {
   let h = `<div class="sbar"><button class="back" data-act="close">${BACK}</button><span class="sbt">${esc(it.title)}</span></div>
     <div class="hero" ${bd}><div class="grab"></div><button class="back" data-act="close">${BACK}</button></div>
     <div class="head">${poster(it.poster, it.title, 'big', 'w342')}<div class="meta">
-      <h2>${esc(it.title)}</h2>${it.originalTitle && it.originalTitle !== it.title ? `<div class="orig">${esc(it.originalTitle)}</div>` : ''}
+      <h2>${esc(it.title)}</h2>${(() => { const o = [...new Set([it.altTitle, it.originalTitle].filter((x) => x && x !== it.title))]; return o.length ? `<div class="orig">${o.map(esc).join(' · ')}</div>` : ''; })()}
       <div class="sub">${esc(info)}</div>${genres ? `<div class="sub">${esc(genres)}</div>` : ''}</div></div>
     <div class="body">`;
   if (it.overview) h += `<p class="ov" data-act="more">${esc(it.overview)}</p>`;
@@ -952,6 +964,18 @@ const A = {
   },
   clearKey() { db.settings.tmdbKey = ''; save(); ui.sRes = null; renderList(); toast('Cheie ștearsă'); },
   backup() { doBackup(); },
+  async setLang(a) {
+    if (LANG() === a.l) return;
+    db.settings.lang = a.l; save(); apiCache.clear(); ui.sRes = null; renderList();
+    const list = items().filter((i) => i.tmdbId);
+    if (!list.length || !db.settings.tmdbKey) return toast('Limba a fost schimbată');
+    toast(`Actualizez titlurile (${list.length})…`);
+    let ok = 0;
+    await pool(list, 4, async (it) => {
+      try { const d = await getDetails(it.type, it.tmdbId); it.type === 'movie' ? applyMovieMeta(it, d) : applyTvMeta(it, d); ok++; } catch (e) {}
+    });
+    save(); refresh(); toast(`Titluri actualizate ✓ (${ok}/${list.length})`);
+  },
   eggClose() { hideEgg(); },
   eggOpen(a) { const e = eggs.find((x) => x.id === a.id); if (e) showEgg(e, false); },
   nfPick() { if (!db.settings.tmdbKey) return toast('Adaugă întâi cheia TMDB'); $('#nfFile').value = ''; $('#nfFile').click(); },
@@ -1133,7 +1157,7 @@ async function nfResolve(g) {
   const eps = {};
   const loadS = async (n) => {
     if (eps[n]) return; eps[n] = [];
-    const [a, b] = await Promise.all([tmdb(`/tv/${c.id}/season/${n}`).catch(() => null), tmdb(`/tv/${c.id}/season/${n}`, { language: 'en-US' }).catch(() => null)]);
+    const [a, b] = await Promise.all([tmdb(`/tv/${c.id}/season/${n}`, { language: 'ro-RO' }).catch(() => null), tmdb(`/tv/${c.id}/season/${n}`, { language: 'en-US' }).catch(() => null)]);
     const map = {};
     for (const src of [a, b]) for (const e of (src && src.episodes) || []) if (e.name) (map[e.episode_number] = map[e.episode_number] || []).push(e.name);
     eps[n] = Object.entries(map).map(([e, names]) => ({ e: Number(e), n1: names.map(norm), n2: names.map(norm2) }));
@@ -1368,7 +1392,20 @@ document.addEventListener('visibilitychange', () => {
   else if (hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000) maybeEgg(); // revenire în aplicație după 5+ minute
 });
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+/* actualizări rapide: verifică la fiecare revenire în aplicație și se reîncarcă singură când apare o versiune nouă */
+let pendingReload = false;
+function applyUpdate() { try { sessionStorage.setItem('filme.updated', '1'); } catch (e) {} location.reload(); }
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || pendingReload) return; // prima instalare: nu e nevoie de reîncărcare
+    if (ctx) pendingReload = true; else applyUpdate(); // nu întrerupem dacă ai ceva deschis
+  });
+}
+try { if (sessionStorage.getItem('filme.updated')) { sessionStorage.removeItem('filme.updated'); setTimeout(() => toast(`Aplicația s-a actualizat ✓ v${APP_VERSION}`), 600); } } catch (e) {}
 </script>
 </body>
 </html>
