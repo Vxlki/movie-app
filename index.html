@@ -25,6 +25,7 @@ html,body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 -apple-sys
 body{padding-bottom:calc(72px + var(--safe-b));min-height:100vh;touch-action:manipulation}
 html.lock,html.lock body,html.plock,html.plock body{overflow:hidden}
 html,body{overscroll-behavior-y:none}
+html{overflow-x:hidden}
 #sheet,.pk,.eggcard{overscroll-behavior:contain}
 button,input,select,textarea{font:inherit;color:inherit}
 button{background:none;border:0;padding:0;cursor:pointer}
@@ -346,7 +347,7 @@ html.glass .egg.show{background:rgba(10,8,16,.4)}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '2.6';
+const APP_VERSION = '2.7';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
@@ -1059,41 +1060,84 @@ tabsEl.addEventListener('touchend', () => tabDragEnd(false));
 tabsEl.addEventListener('touchcancel', () => tabDragEnd(true));
 window.addEventListener('resize', () => { indReady = false; placeInd(); });
 
-/* ---------- efect elastic la capetele paginii (ca pe iOS) ----------
-   Sus: pe toate ecranele. Jos: peste tot, mai puțin la Caută cât timp se mai încarcă rezultate. */
+/* ---------- gesturi pe pagină ----------
+   • vertical: efect elastic la capete (sus peste tot; jos peste tot, mai puțin la Caută cât se mai încarcă rezultate)
+   • orizontal: glisezi între ecranele principale; la primul / ultimul ecran pagina se întinde elastic */
 (() => {
   const view = $('#view');
-  const H = () => window.innerHeight;
+  const H = () => window.innerHeight, W = () => window.innerWidth;
   const rub = (d) => Math.sign(d) * (1 - 1 / (Math.abs(d) * 0.55 / H() + 1)) * H() * 0.6;
+  const hrub = (d) => Math.sign(d) * (1 - 1 / (Math.abs(d) * 0.55 / W() + 1)) * W() * 0.5;
   const atTop = () => window.scrollY <= 0;
   const atBottom = () => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
   const bottomOk = () => !(ui.tab === 'search' && ui.sRes && ui.sPage < ui.sTotal);
   const blocked = (t) => document.documentElement.classList.contains('lock') || document.documentElement.classList.contains('plock')
     || !$('#egg').classList.contains('hide') || (t && t.closest && t.closest('#tabs,#sheet,#picker,#egg'));
-  let o = null;
+  const noSwipe = (t) => t && t.closest && t.closest('.fbar,.seg,.kind,input,textarea,select'); // acolo glisarea orizontală are alt rol
+  const TABS = () => tabBtns().map((b) => b.dataset.tab);
+  let o = null, busy = false;
   const release = () => {
     view.style.transition = 'transform .5s cubic-bezier(.2,.9,.25,1)'; view.style.transform = '';
-    setTimeout(() => { if (!o || !o.dir) view.style.transition = ''; }, 520);
+    setTimeout(() => { if (!o || !o.mode) view.style.transition = ''; }, 520);
   };
+  function indTo(i, j, p) { // bula din bara de jos urmează glisarea
+    const bs = tabBtns(); if (!bs[i] || !bs[j]) return;
+    tabInd.style.transition = 'none';
+    tabInd.style.left = (bs[i].offsetLeft + (bs[j].offsetLeft - bs[i].offsetLeft) * p) + 'px';
+  }
+  function switchTo(tab, dir) {
+    busy = true;
+    view.style.transition = 'transform .17s cubic-bezier(.4,0,1,1)'; view.style.transform = `translateX(${dir * W()}px)`;
+    tabInd.style.transition = '';
+    setTimeout(() => {
+      view.style.transition = 'none'; view.style.transform = `translateX(${-dir * W()}px)`;
+      A.tab({ tab });
+      void view.offsetWidth;
+      view.style.transition = 'transform .34s cubic-bezier(.2,.9,.3,1)'; view.style.transform = '';
+      setTimeout(() => { view.style.transition = ''; busy = false; }, 360);
+    }, 170);
+  }
   document.addEventListener('touchstart', (e) => {
-    if (e.touches.length !== 1 || blocked(e.target)) { o = null; return; }
-    const t = e.touches[0]; o = { x: t.clientX, y: t.clientY, ly: t.clientY, dir: 0, anchor: 0, horiz: false };
+    if (busy || e.touches.length !== 1 || blocked(e.target)) { o = null; return; }
+    const t = e.touches[0], now = performance.now();
+    o = { x: t.clientX, y: t.clientY, ly: t.clientY, lx: t.clientX, mode: null, anchor: 0, hOk: !noSwipe(e.target), pts: [{ t: now, x: t.clientX }] };
   }, { passive: true });
   document.addEventListener('touchmove', (e) => {
-    if (!o || o.horiz) return;
-    const t = e.touches[0], step = t.clientY - o.ly; o.ly = t.clientY;
-    if (!o.dir) {
-      if (Math.abs(t.clientX - o.x) > 10 && Math.abs(t.clientX - o.x) > Math.abs(t.clientY - o.y)) { o.horiz = true; return; } // ex. rândul de filtre
-      if (step > 0 && atTop()) { o.dir = 1; o.anchor = t.clientY - step; }
-      else if (step < 0 && atBottom() && bottomOk()) { o.dir = -1; o.anchor = t.clientY - step; }
-      else return;
+    if (!o || o.mode === 'none') return;
+    const t = e.touches[0], step = t.clientY - o.ly; o.ly = t.clientY; o.lx = t.clientX;
+    o.pts.push({ t: performance.now(), x: t.clientX }); if (o.pts.length > 8) o.pts.shift();
+    const dx = t.clientX - o.x, dy = t.clientY - o.y;
+    if (!o.mode) {
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) { o.mode = o.hOk ? 'h' : 'none'; if (o.mode === 'none') return; }
+      else if (step > 0 && atTop()) { o.mode = 'v'; o.dir = 1; o.anchor = t.clientY - step; }
+      else if (step < 0 && atBottom() && bottomOk()) { o.mode = 'v'; o.dir = -1; o.anchor = t.clientY - step; }
+      else { if (Math.abs(dy) > 12) o.mode = 'none'; return; } // derulare normală
+    }
+    e.preventDefault();
+    if (o.mode === 'h') {
+      const tabs = TABS(), i = tabs.indexOf(ui.tab), j = dx < 0 ? i + 1 : i - 1;
+      const edge = j < 0 || j >= tabs.length;
+      view.style.transition = 'none'; view.style.transform = `translateX(${(edge ? hrub(dx) : dx).toFixed(1)}px)`;
+      if (!edge) indTo(i, j, Math.min(1, Math.abs(dx) / W()));
+      return;
     }
     const d = t.clientY - o.anchor;
-    if (d * o.dir <= 0) { o.dir = 0; view.style.transition = ''; view.style.transform = ''; return; } // s-a întors: derulare normală
-    e.preventDefault();
+    if (d * o.dir <= 0) { o.mode = null; view.style.transition = ''; view.style.transform = ''; return; } // s-a întors: derulare normală
     view.style.transition = 'none'; view.style.transform = `translateY(${rub(d).toFixed(1)}px)`;
   }, { passive: false });
-  const end = () => { if (o && o.dir) release(); o = null; };
+  const end = () => {
+    if (!o) return; const g = o; o = null;
+    if (g.mode === 'v') return release();
+    if (g.mode !== 'h') return;
+    const dx = g.lx - g.x, last = g.pts[g.pts.length - 1], rec = g.pts.filter((p) => last.t - p.t <= 100);
+    const v = rec.length > 1 ? (last.x - rec[0].x) / Math.max(1, last.t - rec[0].t) : 0;
+    const tabs = TABS(), i = tabs.indexOf(ui.tab), j = dx < 0 ? i + 1 : i - 1;
+    const go = j >= 0 && j < tabs.length && (Math.abs(dx) > W() * 0.3 || (Math.abs(dx) > 40 && Math.abs(v) > 0.35 && Math.sign(v) === Math.sign(dx)));
+    if (go) return switchTo(tabs[j], dx < 0 ? -1 : 1);
+    view.style.transition = 'transform .45s cubic-bezier(.2,.9,.3,1.12)'; view.style.transform = '';
+    tabInd.style.transition = ''; placeInd();
+    setTimeout(() => { view.style.transition = ''; }, 460);
+  };
   document.addEventListener('touchend', end); document.addEventListener('touchcancel', end);
   // când o derulare cu inerție lovește capătul, pagina „sare” puțin
   let ly = window.scrollY, lt = performance.now(), v = 0, edge = 0;
@@ -1101,7 +1145,7 @@ window.addEventListener('resize', () => { indReady = false; placeInd(); });
     const now = performance.now(), y = window.scrollY;
     v = (y - ly) / Math.max(1, now - lt); ly = y; lt = now;
     const e = atTop() ? 1 : atBottom() ? -1 : 0;
-    if (e && e !== edge && !o && Math.abs(v) > 0.8 && !blocked() && (e === 1 || bottomOk()) && view.animate) {
+    if (e && e !== edge && !o && !busy && Math.abs(v) > 0.8 && !blocked() && (e === 1 || bottomOk()) && view.animate) {
       const a = Math.min(36, Math.abs(v) * 14) * e;
       view.animate([{ transform: 'translateY(0)' }, { transform: `translateY(${a}px)`, offset: 0.35 }, { transform: 'translateY(0)' }],
         { duration: 520, easing: 'cubic-bezier(.2,.8,.3,1)' });
