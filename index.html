@@ -23,7 +23,9 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif}
 body{padding-bottom:calc(72px + var(--safe-b));min-height:100vh;touch-action:manipulation}
-html.lock,html.lock body{overflow:hidden}
+html.lock,html.lock body,html.plock,html.plock body{overflow:hidden}
+html,body{overscroll-behavior-y:none}
+#sheet,.pk,.eggcard{overscroll-behavior:contain}
 button,input,select,textarea{font:inherit;color:inherit}
 button{background:none;border:0;padding:0;cursor:pointer}
 input,select,textarea{font-size:16px}
@@ -317,8 +319,8 @@ html.glass .egg{background:rgba(10,8,16,.45)}
 <nav class="tabs" id="tabs">
   <button data-act="tab" data-tab="saved"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3h11A1.5 1.5 0 0 1 19 4.5V21l-7-4.6L5 21V4.5A1.5 1.5 0 0 1 6.5 3z"/></svg>Salvate</button>
   <button data-act="tab" data-tab="fav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.4-9.3-9.1C1.5 8.2 3.6 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.8 1.2-1.7 2.8-2.8 4.8-2.8 3.6 0 5.7 3.7 4.5 6.9-1.8 4.7-9.3 9.1-9.3 9.1z"/></svg>Preferate</button>
-  <button data-act="tab" data-tab="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Caută</button>
   <button data-act="tab" data-tab="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Statistici</button>
+  <button data-act="tab" data-tab="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Caută</button>
   <button data-act="tab" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Setări</button>
 </nav>
 
@@ -337,7 +339,7 @@ html.glass .egg{background:rgba(10,8,16,.45)}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '2.1';
+const APP_VERSION = '2.2';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
@@ -786,7 +788,8 @@ function openPicker(title, opts, cur, onPick) {
   const el = $('#picker');
   el.innerHTML = `<div class="pk"><div class="pkgrab"></div><div class="pkh">${esc(title)}</div>${opts.map((o, i) =>
     `<button class="pko${o.v === cur ? ' on' : ''}" data-i="${i}"${o.dis ? ' disabled' : ''}>${o.img ? `<img src="${o.img}" alt="">` : ''}<span>${esc(o.l)}${o.note ? `<small>${esc(o.note)}</small>` : ''}</span>${o.v === cur ? '<b>✓</b>' : ''}</button>`).join('')}</div>`;
-  el.classList.remove('hide'); requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+  el.classList.remove('hide'); document.documentElement.classList.add('plock');
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
   el.onclick = (e) => {
     const b = e.target.closest('.pko');
     if (b && b.disabled) return;
@@ -794,7 +797,38 @@ function openPicker(title, opts, cur, onPick) {
     if (b || e.target === el) closePicker();
   };
 }
-function closePicker() { const el = $('#picker'); el.classList.remove('show'); setTimeout(() => el.classList.add('hide'), 250); }
+function closePicker() {
+  const el = $('#picker'); el.classList.remove('show'); document.documentElement.classList.remove('plock');
+  setTimeout(() => { if (!el.classList.contains('show')) el.classList.add('hide'); }, 250);
+}
+(() => { // foaia de filtre: tragi în jos ca s-o închizi; atingerile nu ajung la pagina de dedesubt
+  const el = $('#picker'); let g = null;
+  el.addEventListener('touchstart', (e) => {
+    const pk = el.querySelector('.pk'); if (!pk || e.touches.length !== 1) { g = null; return; }
+    const t = e.touches[0];
+    g = { y: t.clientY, dy: 0, pk, inPk: pk.contains(e.target), grab: !!e.target.closest('.pkgrab,.pkh'), top: pk.scrollTop <= 0, drag: false, t0: performance.now() };
+  }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    if (!g || !g.inPk) { e.preventDefault(); return; } // fundalul întunecat nu derulează pagina
+    g.dy = e.touches[0].clientY - g.y;
+    if (!g.drag && g.dy > 6 && (g.grab || (g.top && g.pk.scrollTop <= 0))) g.drag = true;
+    if (g.drag) { e.preventDefault(); g.pk.style.transition = 'none'; g.pk.style.transform = `translateY(${Math.max(0, g.dy)}px)`; }
+    else if (g.pk.scrollHeight <= g.pk.clientHeight + 1) e.preventDefault(); // listă scurtă: nimic de derulat
+  }, { passive: false });
+  const end = () => {
+    if (!g) return; const d = g; g = null;
+    if (!d.drag) return;
+    const v = d.dy / Math.max(1, performance.now() - d.t0);
+    d.pk.style.transition = '';
+    if (d.dy > 90 || (d.dy > 30 && v > 0.5)) { d.pk.style.transform = 'translateY(105%)'; closePicker(); }
+    else d.pk.style.transform = '';
+  };
+  el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
+})();
+(() => { // mesajul secret: nici el nu lasă pagina din spate să se miște
+  const el = $('#egg');
+  el.addEventListener('touchmove', (e) => { const c = el.querySelector('.eggcard'); if (!c || !c.contains(e.target) || c.scrollHeight <= c.clientHeight + 1) e.preventDefault(); }, { passive: false });
+})();
 function applyFilters() { saveFilters(); ui.sRes = null; const fb = $('.fbar'); if (fb) fb.outerHTML = fbarHtml(); renderList(); runSearch(0); }
 const provCache = {};
 async function providerList() {
