@@ -204,6 +204,34 @@ input[type=date].field{width:100%;-webkit-appearance:none;min-height:44px}
   padding:10px 16px;border-radius:12px;font-size:14px;font-weight:600;transition:.25s;pointer-events:none;max-width:88vw;text-align:center}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 
+/* antet „Salvate”: titlu + comutator Filme / Seriale */
+.hrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.hrow h1{margin:0}
+.kind{display:flex;flex:0 0 auto;background:var(--s1);border-radius:20px;padding:3px;gap:2px}
+.kind button{padding:7px 13px;border-radius:17px;font-size:14px;font-weight:700;color:var(--mu);transition:background .2s,color .2s}
+.kind button .n{opacity:.6;font-weight:600;margin-left:4px;font-size:12px}
+.kind button.on{background:var(--gold);color:#241a05}
+/* filtre de căutare */
+.fbar{display:flex;gap:8px;overflow-x:auto;margin:10px -16px 0;padding:0 16px 2px;scrollbar-width:none}
+.fbar::-webkit-scrollbar{display:none}
+.fchip{flex:0 0 auto;white-space:nowrap;padding:7px 12px;border-radius:18px;background:var(--s1);border:1px solid var(--line);font-size:14px;font-weight:650;color:var(--mu)}
+.fchip.on{background:rgba(255,196,64,.15);border-color:rgba(255,196,64,.45);color:var(--gold)}
+.tile .ty .vote{margin-left:6px;color:var(--gold)}
+#picker{position:fixed;inset:0;z-index:55;display:flex;align-items:flex-end;background:rgba(10,8,16,.5);opacity:0;transition:opacity .22s}
+#picker.show{opacity:1}
+.pk{width:100%;max-height:72vh;overflow-y:auto;background:#1e1a29;border-radius:24px 24px 0 0;padding:8px 12px calc(16px + var(--safe-b));
+  transform:translateY(40px);transition:transform .3s cubic-bezier(.2,.9,.3,1.1);border-top:1px solid rgba(255,255,255,.12)}
+#picker.show .pk{transform:none}
+.pkgrab{width:40px;height:5px;border-radius:3px;background:rgba(255,255,255,.3);margin:2px auto 8px}
+.pkh{font-weight:800;font-size:18px;padding:4px 8px 10px}
+.pko{display:flex;align-items:center;gap:12px;width:100%;padding:12px;border-radius:12px;font-size:16px;font-weight:600;text-align:left;color:var(--tx)}
+.pko:active{background:rgba(255,255,255,.06)}
+.pko.on{background:rgba(255,196,64,.12);color:var(--gold)}
+.pko span{display:flex;flex-direction:column}
+.pko small{font-size:12px;color:var(--mu2);font-weight:500}
+.pko b{margin-left:auto}
+.pko img{width:30px;height:30px;border-radius:8px}
+.pko:disabled{opacity:.3}
 /* căsuță de căutare cu buton de ștergere */
 .sbox{position:relative;flex:1;min-width:0;display:flex}
 .sbox .field{flex:1;width:100%;padding-right:40px}
@@ -238,6 +266,11 @@ html.glass #sheet{background:transparent;isolation:isolate}
 html.glass .top{background:rgba(20,17,28,.38);backdrop-filter:var(--gblur);-webkit-backdrop-filter:var(--gblur);border-bottom:1px solid rgba(255,255,255,.07)}
 html.glass .seg{background:var(--glass);border:1px solid var(--gline);box-shadow:var(--ghi);border-radius:14px}
 html.glass .seg button{border-radius:11px}
+html.glass .fchip{background:var(--glass);border-color:var(--gline);box-shadow:var(--ghi)}
+html.glass .fchip.on{background:rgba(255,196,64,.16);border-color:rgba(255,196,64,.45)}
+html.glass .pk{background:rgba(36,29,52,.7);backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
+html.glass .kind{background:var(--glass);border:1px solid var(--gline);box-shadow:var(--ghi)}
+html.glass .kind button.on{background:linear-gradient(180deg,#ffd77a,#ffbf33);box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 4px 12px rgba(255,196,64,.25)}
 html.glass .seg button.on{background:rgba(255,255,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 2px 10px rgba(0,0,0,.25)}
 html.glass .field{background:var(--glass);border:1px solid var(--gline);box-shadow:var(--ghi)}
 html.glass .card,html.glass .season,html.glass .kpi,html.glass .chart,html.glass .panel,html.glass .imp,html.glass .banner{
@@ -282,8 +315,8 @@ html.glass .egg{background:rgba(10,8,16,.45)}
 <main id="view"></main>
 
 <nav class="tabs" id="tabs">
-  <button data-act="tab" data-tab="movies"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></svg>Filme</button>
-  <button data-act="tab" data-tab="tv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M8 2l4 4 4-4"/></svg>Seriale</button>
+  <button data-act="tab" data-tab="saved"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3h11A1.5 1.5 0 0 1 19 4.5V21l-7-4.6L5 21V4.5A1.5 1.5 0 0 1 6.5 3z"/></svg>Salvate</button>
+  <button data-act="tab" data-tab="fav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.4-9.3-9.1C1.5 8.2 3.6 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.8 1.2-1.7 2.8-2.8 4.8-2.8 3.6 0 5.7 3.7 4.5 6.9-1.8 4.7-9.3 9.1-9.3 9.1z"/></svg>Preferate</button>
   <button data-act="tab" data-tab="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Caută</button>
   <button data-act="tab" data-tab="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Statistici</button>
   <button data-act="tab" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Setări</button>
@@ -292,6 +325,7 @@ html.glass .egg{background:rgba(10,8,16,.45)}
 <div id="sheet" aria-hidden="true"></div>
 <div id="toast"></div>
 <div id="egg" class="egg hide" data-act="eggClose"></div>
+<div id="picker" class="hide"></div>
 <input type="file" id="nfFile" accept=".csv,text/csv,text/comma-separated-values,text/plain" style="position:absolute;width:1px;height:1px;opacity:0;left:-10px;top:0">
 <input type="file" id="restoreFile" accept="application/json,text/plain,.json,.txt" style="position:absolute;width:1px;height:1px;opacity:0;left:-10px;top:0">
 
@@ -303,7 +337,7 @@ html.glass .egg{background:rgba(10,8,16,.45)}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '2.0';
+const APP_VERSION = '2.1';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
@@ -472,8 +506,9 @@ const TV_ST = { watching: 'În curs', watchlist: 'De văzut', completed: 'Termin
 const MOVIE_ST = { watched: 'Văzut', watchlist: 'De văzut' };
 
 /* ---------- UI de bază ---------- */
-const ui = { tab: 'movies', mSeg: 'watched', tSeg: 'watching', filter: '', sort: 'date', sq: '', sType: 'all', sRes: null, sLoading: false, sErr: '', bannerOff: false };
+const ui = { f: null, tab: 'saved', kind: 'movie', fType: 'all', mSeg: 'watched', tSeg: 'watching', filter: '', sort: 'date', sq: '', sType: 'all', sRes: null, sLoading: false, sErr: '', bannerOff: false };
 const searchPreview = new Map();
+ui.f = Object.assign({}, { sort: 'recent', genre: '', prov: '', provName: '', year: '', top7: false, hideSaved: false }, db.settings.sf || {});
 let toastT;
 function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
@@ -512,79 +547,133 @@ const sortSelect = () => `<select class="field" data-in="sort">
 const clrBtn = (v, act) => `<button class="clr${v ? '' : ' hide'}" data-act="${act}" aria-label="Șterge textul">✕</button>`;
 const filterInput = (ph) => `<div class="sbox"><input class="field" type="search" placeholder="${ph}" value="${esc(ui.filter)}" data-in="filter" autocomplete="off">${clrBtn(ui.filter, 'clrFilter')}</div>`;
 
-/* ---------- ecran: Filme ---------- */
+/* ---------- carduri ---------- */
+function movieCard(it, inFav) {
+  const sub = [inFav ? 'Film' : '', it.year, it.status === 'watched' && it.watchedOn ? 'văzut ' + fmtDate(it.watchedOn) : (inFav ? 'de văzut' : '')].filter(Boolean).join(' · ');
+  return `<div class="card" data-act="open" data-key="${esc(it.key)}">${poster(it.poster, it.title)}
+    <div class="meta"><div class="t">${it.fav && !inFav ? '<span class="fh">♥</span>' : ''}${esc(it.title)}</div><div class="sub">${esc(sub)}</div>${it.note ? `<div class="note">${esc(it.note)}</div>` : ''}</div>
+    ${it.status === 'watched' ? scoreBox(it.rating) : `<button class="pill go" data-act="quickWatched" data-key="${esc(it.key)}">✓ Văzut</button>`}</div>`;
+}
+function tvCard(it, inFav) {
+  const p = tvProgress(it), nx = nextEp(it);
+  let sub = '';
+  if (it.status === 'watching' || it.status === 'dropped') {
+    sub = nx ? `Următorul: S${nx.s} E${nx.e}` : (it.nextAir ? `La zi · ep. nou pe ${fmtDate(it.nextAir.date, { day: 'numeric', month: 'short' })}` : 'La zi');
+  } else sub = [it.year, it.seasons ? `${it.seasons.length} ${it.seasons.length === 1 ? 'sezon' : 'sezoane'}` : ''].filter(Boolean).join(' · ');
+  if (inFav) sub = `Serial · ${TV_ST[it.status] || ''} · ${sub}`;
+  const pct = p.t ? Math.round(p.w / p.t * 100) : 0;
+  const right = it.status === 'watching' && nx
+    ? `<button class="pill go" data-act="nextEp" data-key="${esc(it.key)}">✓ S${nx.s}E${nx.e}</button>`
+    : (it.status === 'completed' ? scoreBox(it.rating) : '');
+  return `<div class="card" data-act="open" data-key="${esc(it.key)}">${poster(it.poster, it.title)}
+    <div class="meta"><div class="t">${it.fav && !inFav ? '<span class="fh">♥</span>' : ''}${esc(it.title)}</div><div class="sub">${esc(sub)}</div>
+    ${p.t && it.status !== 'watchlist' ? `<div class="bar"><i style="width:${pct}%"></i></div><div class="small" style="margin-top:4px">${p.w}/${p.t} episoade</div>` : ''}</div>${right}</div>`;
+}
+const wrapList = (h) => `<div class="wrap" style="padding-top:0">${h}</div>`;
+
+/* ---------- ecran: Salvate (filme și seriale, pe statusuri) ---------- */
 const V = {};
-V.movies = {
+const MOVIE_SEG = { watched: 'Văzute', watchlist: 'De văzut' };
+V.saved = {
   head() {
-    const all = items().filter((i) => i.type === 'movie');
-    const c = (s) => all.filter((i) => i.status === s).length;
-    return `<div class="top"><h1>Filme</h1>
-      <div class="seg">${Object.entries(MOVIE_ST).map(([k, l]) => `<button class="${ui.mSeg === k ? 'on' : ''}" data-act="mSeg" data-seg="${k}">${k === 'watched' ? 'Văzute' : l}<span class="n">${c(k)}</span></button>`).join('')}<button class="${ui.mSeg === 'fav' ? 'on' : ''}" data-act="mSeg" data-seg="fav">♥ Preferate<span class="n">${all.filter((i) => i.fav).length}</span></button></div>
+    const isM = ui.kind === 'movie', ST = isM ? MOVIE_SEG : TV_ST, cur = isM ? ui.mSeg : ui.tSeg;
+    const all = items().filter((i) => i.type === ui.kind);
+    const c = (st) => all.filter((i) => i.status === st).length;
+    const n = (k) => items().filter((i) => i.type === k).length;
+    return `<div class="top"><div class="hrow"><h1>Salvate</h1>
+        <div class="kind">${[['movie', 'Filme'], ['tv', 'Seriale']].map(([k, l]) => `<button class="${ui.kind === k ? 'on' : ''}" data-act="kind" data-k="${k}">${l}<span class="n">${n(k)}</span></button>`).join('')}</div></div>
+      <div class="seg">${Object.entries(ST).map(([k, l]) => `<button class="${cur === k ? 'on' : ''}" data-act="${isM ? 'mSeg' : 'tSeg'}" data-seg="${k}">${l}<span class="n">${c(k)}</span></button>`).join('')}</div>
+      <div class="tools">${filterInput('Filtrează…')}${sortSelect()}</div></div>`;
+  },
+  list() { return ui.kind === 'movie' ? movieList() : tvList(); }
+};
+function movieList() {
+  const list = items().filter((i) => i.type === 'movie' && i.status === ui.mSeg && matches(i));
+  list.sort(sorter(ui.mSeg === 'watched' ? 'movieWatched' : 'added'));
+  let h = backupBanner();
+  if (!list.length) return h + (ui.filter ? `<div class="empty">Niciun rezultat.</div>` :
+    `<div class="empty"><b>${ui.mSeg === 'watched' ? 'Niciun film văzut încă' : 'Lista e goală'}</b>Caută un film și adaugă-l.<br><br><button class="btn pri" data-act="tab" data-tab="search">Caută filme</button></div>`);
+  let lastG = null;
+  for (const it of list) {
+    if (ui.mSeg === 'watched' && ui.sort === 'date') {
+      const g = it.watchedOn ? it.watchedOn.slice(0, 7) : 'x';
+      if (g !== lastG) { h += `<div class="group">${g === 'x' ? 'Fără dată' : cap(fmtDate(g + '-15', { month: 'long', year: 'numeric' }))}</div>`; lastG = g; }
+    }
+    h += movieCard(it);
+  }
+  return wrapList(h);
+}
+function tvList() {
+  const list = items().filter((i) => i.type === 'tv' && i.status === ui.tSeg && matches(i));
+  list.sort(sorter(ui.tSeg === 'watching' ? 'tvWatching' : 'added'));
+  const h = backupBanner();
+  if (!list.length) return h + (ui.filter ? `<div class="empty">Niciun rezultat.</div>` :
+    `<div class="empty"><b>Nimic aici încă</b>Caută un serial și începe să bifezi episoadele.<br><br><button class="btn pri" data-act="tab" data-tab="search">Caută seriale</button></div>`);
+  return wrapList(h + list.map((it) => tvCard(it)).join(''));
+}
+
+/* ---------- ecran: Preferate (filme + seriale) ---------- */
+V.fav = {
+  head() {
+    const all = items().filter((i) => i.fav);
+    const n = (t) => (t === 'all' ? all.length : all.filter((i) => i.type === t).length);
+    return `<div class="top"><h1>Preferate</h1>
+      <div class="seg">${[['all', 'Toate'], ['movie', 'Filme'], ['tv', 'Seriale']].map(([k, l]) => `<button class="${ui.fType === k ? 'on' : ''}" data-act="fType" data-t="${k}">${l}<span class="n">${n(k)}</span></button>`).join('')}</div>
       <div class="tools">${filterInput('Filtrează…')}${sortSelect()}</div></div>`;
   },
   list() {
-    let list = items().filter((i) => i.type === 'movie' && (ui.mSeg === 'fav' ? i.fav : i.status === ui.mSeg) && matches(i));
-    list.sort(sorter(ui.mSeg === 'watched' ? 'movieWatched' : 'added'));
-    let h = backupBanner();
-    if (!list.length) return h + (ui.filter ? `<div class="empty">Niciun rezultat.</div>` :
-      (ui.mSeg === 'fav' ? `<div class="empty"><b>Niciun film preferat încă</b>Apasă ♥ în colțul din dreapta sus al unui film din listele tale.</div>` :
-      `<div class="empty"><b>${ui.mSeg === 'watched' ? 'Niciun film văzut încă' : 'Lista e goală'}</b>Caută un film și adaugă-l.<br><br><button class="btn pri" data-act="tab" data-tab="search">Caută filme</button></div>`));
-    let lastG = null;
-    for (const it of list) {
-      if (ui.mSeg === 'watched' && ui.sort === 'date') {
-        const g = it.watchedOn ? it.watchedOn.slice(0, 7) : 'x';
-        if (g !== lastG) { h += `<div class="group">${g === 'x' ? 'Fără dată' : cap(fmtDate(g + '-15', { month: 'long', year: 'numeric' }))}</div>`; lastG = g; }
-      }
-      const sub = [it.year, it.status === 'watched' && it.watchedOn ? 'văzut ' + fmtDate(it.watchedOn) : ''].filter(Boolean).join(' · ');
-      h += `<div class="card" data-act="open" data-key="${esc(it.key)}">${poster(it.poster, it.title)}
-        <div class="meta"><div class="t">${it.fav ? '<span class="fh">♥</span>' : ''}${esc(it.title)}</div><div class="sub">${esc(sub)}</div>${it.note ? `<div class="note">${esc(it.note)}</div>` : ''}</div>
-        ${it.status === 'watched' ? scoreBox(it.rating) : `<button class="pill go" data-act="quickWatched" data-key="${esc(it.key)}">✓ Văzut</button>`}</div>`;
-    }
-    return `<div class="wrap" style="padding-top:0">${h}</div>`;
+    const list = items().filter((i) => i.fav && (ui.fType === 'all' || i.type === ui.fType) && matches(i));
+    list.sort(ui.sort === 'date' ? (a, b) => (b.favAt || b.updatedAt) - (a.favAt || a.updatedAt) : sorter());
+    if (!list.length) return ui.filter ? `<div class="empty">Niciun rezultat.</div>`
+      : `<div class="empty"><b>Niciun preferat încă</b>Deschide un film sau un serial din listele tale și apasă ♥ din colțul din dreapta sus.</div>`;
+    return wrapList(list.map((it) => (it.type === 'movie' ? movieCard(it, true) : tvCard(it, true))).join(''));
   }
 };
 
-/* ---------- ecran: Seriale ---------- */
-V.tv = {
-  head() {
-    const all = items().filter((i) => i.type === 'tv');
-    const c = (s) => all.filter((i) => i.status === s).length;
-    return `<div class="top"><h1>Seriale</h1>
-      <div class="seg">${Object.entries(TV_ST).map(([k, l]) => `<button class="${ui.tSeg === k ? 'on' : ''}" data-act="tSeg" data-seg="${k}">${l}<span class="n">${c(k)}</span></button>`).join('')}<button class="${ui.tSeg === 'fav' ? 'on' : ''}" data-act="tSeg" data-seg="fav">♥ Preferate<span class="n">${all.filter((i) => i.fav).length}</span></button></div>
-      <div class="tools">${filterInput('Filtrează…')}${sortSelect()}</div></div>`;
-  },
-  list() {
-    let list = items().filter((i) => i.type === 'tv' && (ui.tSeg === 'fav' ? i.fav : i.status === ui.tSeg) && matches(i));
-    list.sort(sorter(ui.tSeg === 'watching' ? 'tvWatching' : 'added'));
-    let h = backupBanner();
-    if (!list.length) return h + (ui.filter ? `<div class="empty">Niciun rezultat.</div>` :
-      (ui.tSeg === 'fav' ? `<div class="empty"><b>Niciun serial preferat încă</b>Apasă ♥ în colțul din dreapta sus al unui serial din listele tale.</div>` :
-      `<div class="empty"><b>Nimic aici încă</b>Caută un serial și începe să bifezi episoadele.<br><br><button class="btn pri" data-act="tab" data-tab="search">Caută seriale</button></div>`));
-    for (const it of list) {
-      const p = tvProgress(it), nx = nextEp(it);
-      let sub = '';
-      if (it.status === 'watching' || it.status === 'dropped') {
-        sub = nx ? `Următorul: S${nx.s} E${nx.e}` : (it.nextAir ? `La zi · ep. nou pe ${fmtDate(it.nextAir.date, { day: 'numeric', month: 'short' })}` : 'La zi');
-      } else sub = [it.year, it.seasons ? `${it.seasons.length} ${it.seasons.length === 1 ? 'sezon' : 'sezoane'}` : ''].filter(Boolean).join(' · ');
-      const pct = p.t ? Math.round(p.w / p.t * 100) : 0;
-      const right = it.status === 'watching' && nx
-        ? `<button class="pill go" data-act="nextEp" data-key="${esc(it.key)}">✓ S${nx.s}E${nx.e}</button>`
-        : (it.status === 'completed' ? scoreBox(it.rating) : '');
-      h += `<div class="card" data-act="open" data-key="${esc(it.key)}">${poster(it.poster, it.title)}
-        <div class="meta"><div class="t">${it.fav ? '<span class="fh">♥</span>' : ''}${esc(it.title)}</div><div class="sub">${esc(sub)}</div>
-        ${p.t && it.status !== 'watchlist' ? `<div class="bar"><i style="width:${pct}%"></i></div><div class="small" style="margin-top:4px">${p.w}/${p.t} episoade</div>` : ''}</div>${right}</div>`;
-    }
-    return `<div class="wrap" style="padding-top:0">${h}</div>`;
-  }
-};
-
-/* ---------- ecran: Caută ---------- */
+/* ---------- ecran: Caută (cu filtre de descoperire) ---------- */
+// genurile au ID-uri diferite la filme (m) și seriale (t) în TMDB; null = genul nu există pentru acel tip
+const GENRES = [
+  { k: 'action', l: 'Acțiune', m: 28, t: 10759 }, { k: 'comedy', l: 'Comedie', m: 35, t: 35 }, { k: 'drama', l: 'Dramă', m: 18, t: 18 },
+  { k: 'romance', l: 'Romance', m: 10749, t: null }, { k: 'horror', l: 'Horror', m: 27, t: null }, { k: 'thriller', l: 'Thriller', m: 53, t: null },
+  { k: 'crime', l: 'Crimă', m: 80, t: 80 }, { k: 'mystery', l: 'Mister', m: 9648, t: 9648 }, { k: 'scifi', l: 'SF', m: 878, t: 10765 },
+  { k: 'fantasy', l: 'Fantasy', m: 14, t: 10765 }, { k: 'adventure', l: 'Aventură', m: 12, t: 10759 }, { k: 'animation', l: 'Animație', m: 16, t: 16 },
+  { k: 'anime', l: 'Anime', m: 16, t: 16, lang: 'ja' }, { k: 'documentary', l: 'Documentar', m: 99, t: 99 }, { k: 'family', l: 'Familie', m: 10751, t: 10751 },
+  { k: 'war', l: 'Război', m: 10752, t: 10768 }, { k: 'history', l: 'Istoric', m: 36, t: null }, { k: 'music', l: 'Muzică', m: 10402, t: null },
+  { k: 'reality', l: 'Reality', m: null, t: 10764 }, { k: 'western', l: 'Western', m: 37, t: 37 }
+];
+const SORTS = [['recent', 'Recente'], ['popular', 'Populare'], ['top', 'Cele mai apreciate'], ['soon', 'În curând']];
+const YEARS = (() => {
+  const y = new Date().getFullYear();
+  return [{ k: '', l: 'Orice an' }, { k: String(y), l: String(y), from: `${y}-01-01`, to: `${y}-12-31` }, { k: String(y - 1), l: String(y - 1), from: `${y - 1}-01-01`, to: `${y - 1}-12-31` },
+    { k: '2020s', l: 'Anii 2020', from: '2020-01-01', to: '2029-12-31' }, { k: '2010s', l: 'Anii 2010', from: '2010-01-01', to: '2019-12-31' },
+    { k: '2000s', l: 'Anii 2000', from: '2000-01-01', to: '2009-12-31' }, { k: '1990s', l: 'Anii ’90', from: '1990-01-01', to: '1999-12-31' },
+    { k: '1980s', l: 'Anii ’80', from: '1980-01-01', to: '1989-12-31' }, { k: 'old', l: 'Înainte de 1980', from: '1900-01-01', to: '1979-12-31' }];
+})();
+const F_DEF = { sort: 'recent', genre: '', prov: '', provName: '', year: '', top7: false, hideSaved: false };
+const sf = () => ui.f;
+function saveFilters() { db.settings.sf = ui.f; save(); }
+const fActive = () => !!(ui.f.genre || ui.f.prov || ui.f.year || ui.f.top7 || ui.f.hideSaved || ui.f.sort !== 'recent');
+function fbarHtml() {
+  const f = sf(), q = !!ui.sq.trim();
+  const chip = (act, label, on, extra = '') => `<button class="fchip${on ? ' on' : ''}" data-act="${act}" ${extra}>${label}</button>`;
+  const g = GENRES.find((x) => x.k === f.genre), y = YEARS.find((x) => x.k === f.year);
+  let h = `<div class="fbar">`;
+  if (!q) h += chip('pickSort', `${esc(SORTS.find(([k]) => k === f.sort)[1])} ▾`, f.sort !== 'recent');
+  h += chip('pickGenre', `${g ? esc(g.l) : 'Gen'} ▾`, !!g);
+  if (!q) h += chip('pickProv', `${f.prov ? esc(f.provName || 'Platformă') : 'Platformă'} ▾`, !!f.prov);
+  h += chip('pickYear', `${f.year ? esc(y ? y.l : f.year) : 'An'} ▾`, !!f.year);
+  h += chip('fToggle', '★ 7+', f.top7, 'data-f="top7"');
+  h += chip('fToggle', 'Ascunde salvate', f.hideSaved, 'data-f="hideSaved"');
+  if (fActive()) h += chip('fReset', 'Resetează', false);
+  return h + `</div>`;
+}
 V.search = {
   head() {
     const t = [['all', 'Toate'], ['movie', 'Filme'], ['tv', 'Seriale']];
     return `<div class="top"><h1>Caută</h1>
       <div class="sbox"><input class="field" type="search" placeholder="Titlu de film sau serial…" value="${esc(ui.sq)}" data-in="sq" autocomplete="off" enterkeyhint="search">${clrBtn(ui.sq, 'clrSq')}</div>
-      <div class="seg" style="margin-top:10px">${t.map(([k, l]) => `<button class="${ui.sType === k ? 'on' : ''}" data-act="sType" data-t="${k}">${l}</button>`).join('')}</div></div>`;
+      <div class="seg" style="margin-top:10px">${t.map(([k, l]) => `<button class="${ui.sType === k ? 'on' : ''}" data-act="sType" data-t="${k}">${l}</button>`).join('')}</div>
+      ${fbarHtml()}</div>`;
   },
   list() {
     const manual = `<div style="text-align:center;margin:28px 0 8px"><button class="btn" data-act="manual">＋ Adaugă manual</button></div>`;
@@ -592,31 +681,88 @@ V.search = {
     if (ui.sLoading && !ui.sRes) return `<div class="wrap"><div class="spin">Se caută…</div></div>`;
     if (ui.sErr) return `<div class="wrap"><div class="empty">${esc(ui.sErr)}</div>${manual}</div>`;
     const res = ui.sRes || [];
-    const title = ui.sq.trim() ? '' : `<div class="group">Populare săptămâna asta</div>`;
-    if (!res.length && ui.sRes) return `<div class="wrap"><div class="empty">Niciun rezultat pentru „${esc(ui.sq)}”.</div>${manual}</div>`;
-    return `<div class="wrap">${title}<div class="grid">${res.map(tileHtml).join('')}</div>${moreHtml()}${manual}</div>`;
+    if (!res.length && ui.sRes) return `<div class="wrap"><div class="empty">${ui.sq.trim() ? `Niciun rezultat pentru „${esc(ui.sq)}”${fActive() ? ' cu filtrele alese' : ''}.` : 'Niciun titlu pentru filtrele alese.'}
+      ${fActive() ? '<br><br><button class="btn" data-act="fReset">Resetează filtrele</button>' : ''}</div>${manual}</div>`;
+    return `<div class="wrap">${resTitle()}<div class="grid">${res.map(tileHtml).join('')}</div>${moreHtml()}${manual}</div>`;
   }
 };
+function resTitle() {
+  if (ui.sq.trim()) return '';
+  const f = sf(), parts = [SORTS.find(([k]) => k === f.sort)[1]];
+  const g = GENRES.find((x) => x.k === f.genre); if (g) parts.push(g.l);
+  if (f.prov) parts.push(f.provName); if (f.year) parts.push((YEARS.find((x) => x.k === f.year) || {}).l);
+  if (f.top7) parts.push('★ 7+');
+  let note = '';
+  if (g && ui.sType !== 'movie' && g.t == null) note = ` <span class="small" style="text-transform:none;letter-spacing:0">(doar filme: TMDB nu are acest gen la seriale)</span>`;
+  if (g && ui.sType !== 'tv' && g.m == null) note = ` <span class="small" style="text-transform:none;letter-spacing:0">(doar seriale)</span>`;
+  return `<div class="group">${parts.map(esc).join(' · ')}${note}</div>`;
+}
 function tileHtml(r) {
   const type = r.media_type, key = `${type}:${r.id}`, it = db.items[key];
   const t = r.title || r.name, y = (r.release_date || r.first_air_date || '').slice(0, 4);
   const tag = it ? `<span class="tag in">${esc((type === 'movie' ? MOVIE_ST : TV_ST)[it.status])}</span>` : (ui.sType === 'all' ? `<span class="tag">${type === 'movie' ? 'Film' : 'Serial'}</span>` : '');
-  return `<div class="tile" data-act="openT" data-type="${type}" data-id="${r.id}">${tag}${poster(r.poster_path, t, '', 'w342')}<div class="tt">${esc(t)}</div><div class="ty">${y}</div></div>`;
+  const vote = r.vote_average && r.vote_count > 20 ? `<span class="vote">★ ${r.vote_average.toFixed(1)}</span>` : '';
+  const date = (r.release_date || r.first_air_date || '');
+  const ylabel = sf().sort === 'soon' && date > today() && !ui.sq.trim() ? fmtDate(date, { day: 'numeric', month: 'short', year: 'numeric' }) : y;
+  return `<div class="tile" data-act="openT" data-type="${type}" data-id="${r.id}">${tag}${poster(r.poster_path, t, '', 'w342')}<div class="tt">${esc(t)}</div><div class="ty">${ylabel}${vote}</div></div>`;
 }
 function moreHtml() {
   if (!ui.sRes || ui.sPage >= ui.sTotal) return '';
   return `<div id="more" class="more">${ui.sMore ? '<div class="spin">Se încarcă…</div>'
     : `<button class="btn" data-act="sMore">${ui.sMoreErr ? 'Reîncearcă' : 'Încarcă mai multe'}</button>`}</div>`;
 }
+const later = (a, b) => (!a ? b : !b ? a : a > b ? a : b), earlier = (a, b) => (!a ? b : !b ? a : a < b ? a : b);
+function discoverParams(type) {
+  const f = sf(), isM = type === 'movie', d = isM ? 'primary_release_date' : 'first_air_date';
+  const tmr = new Date(Date.now() + 864e5), tomorrow = `${tmr.getFullYear()}-${pad(tmr.getMonth() + 1)}-${pad(tmr.getDate())}`;
+  const p = { include_adult: 'false' };
+  let gte = null, lte = null, minVotes = 0;
+  if (f.sort === 'recent') { p.sort_by = `${d}.desc`; lte = today(); minVotes = isM ? 20 : 10; }
+  else if (f.sort === 'popular') p.sort_by = 'popularity.desc';
+  else if (f.sort === 'top') { p.sort_by = 'vote_average.desc'; minVotes = isM ? 1000 : 300; }
+  else if (f.sort === 'soon') { p.sort_by = 'popularity.desc'; gte = tomorrow; }
+  const g = GENRES.find((x) => x.k === f.genre);
+  if (g) { const id = isM ? g.m : g.t; if (id == null) return null; p.with_genres = id; if (g.lang) p.with_original_language = g.lang; }
+  const y = YEARS.find((x) => x.k === f.year);
+  if (y && y.from) { gte = later(gte, y.from); lte = earlier(lte, y.to); }
+  if (gte) p[`${d}.gte`] = gte; if (lte) p[`${d}.lte`] = lte;
+  if (f.top7) { p['vote_average.gte'] = 7; minVotes = Math.max(minVotes, 50); }
+  if (minVotes) p['vote_count.gte'] = minVotes;
+  if (f.prov) Object.assign(p, { with_watch_providers: f.prov, watch_region: COUNTRY(), with_watch_monetization_types: 'flatrate|free|ads' });
+  return p;
+}
+function passClient(r, isQuery) { // filtre aplicate pe telefon (la căutarea după titlu și pentru „Ascunde salvate”)
+  const f = sf();
+  if (f.hideSaved && db.items[`${r.media_type}:${r.id}`]) return false;
+  if (!isQuery) return true;
+  const g = GENRES.find((x) => x.k === f.genre);
+  if (g) { const id = r.media_type === 'movie' ? g.m : g.t; if (id == null || !(r.genre_ids || []).includes(id)) return false; if (g.lang && r.original_language !== g.lang) return false; }
+  const y = YEARS.find((x) => x.k === f.year), date = r.release_date || r.first_air_date || '';
+  if (y && y.from && !(date >= y.from && date <= y.to)) return false;
+  if (f.top7 && !(r.vote_average >= 7)) return false;
+  return true;
+}
 async function fetchSearch(page) {
   const q = ui.sq.trim(), t = ui.sType;
-  let j;
-  if (!q) j = await tmdb(`/trending/${t}/week`, { page });
-  else if (t === 'all') j = await tmdb('/search/multi', { query: q, include_adult: 'false', page });
-  else j = await tmdb(`/search/${t}`, { query: q, include_adult: 'false', page });
-  const res = (j.results || []).map((r) => ({ ...r, media_type: r.media_type || t })).filter((r) => r.media_type === 'movie' || r.media_type === 'tv');
+  let res = [], total = 1;
+  if (!q) {
+    const types = t === 'all' ? ['movie', 'tv'] : [t];
+    const parts = await Promise.all(types.map(async (ty) => {
+      const p = discoverParams(ty); if (!p) return { results: [], total_pages: 0 };
+      const j = await tmdb(`/discover/${ty}`, { ...p, page });
+      return { ...j, results: (j.results || []).map((r) => ({ ...r, media_type: ty })) };
+    }));
+    total = Math.max(0, ...parts.map((j) => j.total_pages || 0));
+    const [a, b = { results: [] }] = parts; // intercalăm filmele cu serialele
+    for (let i = 0; i < Math.max(a.results.length, b.results.length); i++) { if (a.results[i]) res.push(a.results[i]); if (b.results[i]) res.push(b.results[i]); }
+  } else {
+    const j = t === 'all' ? await tmdb('/search/multi', { query: q, include_adult: 'false', page }) : await tmdb(`/search/${t}`, { query: q, include_adult: 'false', page });
+    res = (j.results || []).map((r) => ({ ...r, media_type: r.media_type || t }));
+    total = j.total_pages || 1;
+  }
+  res = res.filter((r) => (r.media_type === 'movie' || r.media_type === 'tv') && passClient(r, !!q));
   res.forEach((r) => searchPreview.set(`${r.media_type}:${r.id}`, r));
-  return { res, total: Math.min(j.total_pages || 1, 500) };
+  return { res, total: Math.min(total, 500) };
 }
 let sTimer, sSeq = 0;
 function runSearch(delay = 350) {
@@ -626,13 +772,40 @@ function runSearch(delay = 350) {
     const seq = ++sSeq;
     ui.sLoading = true; ui.sErr = ''; ui.sMore = false; ui.sMoreErr = false;
     try {
-      const { res, total } = await fetchSearch(1);
+      let page = 1, { res, total } = await fetchSearch(1);
+      while (!res.length && page < total && page < 4) { page++; ({ res, total } = await fetchSearch(page)); } // filtrele pot goli o pagină
       if (seq !== sSeq) return;
-      ui.sRes = res; ui.sPage = 1; ui.sTotal = total;
+      ui.sRes = res; ui.sPage = page; ui.sTotal = total;
     } catch (e) { if (seq !== sSeq) return; ui.sErr = errMsg(e); ui.sRes = null; }
     ui.sLoading = false;
     if (ui.tab === 'search') { renderList(); window.scrollTo(0, 0); }
   }, delay);
+}
+/* ---------- alegere din listă (foaie de jos) ---------- */
+function openPicker(title, opts, cur, onPick) {
+  const el = $('#picker');
+  el.innerHTML = `<div class="pk"><div class="pkgrab"></div><div class="pkh">${esc(title)}</div>${opts.map((o, i) =>
+    `<button class="pko${o.v === cur ? ' on' : ''}" data-i="${i}"${o.dis ? ' disabled' : ''}>${o.img ? `<img src="${o.img}" alt="">` : ''}<span>${esc(o.l)}${o.note ? `<small>${esc(o.note)}</small>` : ''}</span>${o.v === cur ? '<b>✓</b>' : ''}</button>`).join('')}</div>`;
+  el.classList.remove('hide'); requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+  el.onclick = (e) => {
+    const b = e.target.closest('.pko');
+    if (b && b.disabled) return;
+    if (b) onPick(opts[b.dataset.i].v);
+    if (b || e.target === el) closePicker();
+  };
+}
+function closePicker() { const el = $('#picker'); el.classList.remove('show'); setTimeout(() => el.classList.add('hide'), 250); }
+function applyFilters() { saveFilters(); ui.sRes = null; const fb = $('.fbar'); if (fb) fb.outerHTML = fbarHtml(); renderList(); runSearch(0); }
+const provCache = {};
+async function providerList() {
+  const c = COUNTRY(); if (provCache[c]) return provCache[c];
+  const [m, t] = await Promise.all(['movie', 'tv'].map((k) => tmdb(`/watch/providers/${k}`, { watch_region: c }).catch(() => ({ results: [] }))));
+  const map = new Map();
+  for (const r of [...(m.results || []), ...(t.results || [])]) {
+    const prio = (r.display_priorities || {})[c] ?? r.display_priority ?? 999, o = map.get(r.provider_id);
+    if (!o || prio < o.prio) map.set(r.provider_id, { id: r.provider_id, name: r.provider_name, logo: r.logo_path, prio });
+  }
+  return (provCache[c] = [...map.values()].sort((a, b) => a.prio - b.prio).slice(0, 16));
 }
 // încărcare automată când ajungi aproape de final (plus buton, ca rezervă)
 async function loadMore() {
@@ -764,11 +937,21 @@ function btnAt(x) {
   for (const b of tabBtns()) { const r = b.getBoundingClientRect(), d = Math.abs(r.left + r.width / 2 - x); if (d < bd) { bd = d; best = b; } }
   return best;
 }
+const rubber = (d) => 22 * (1 - Math.exp(-d / 45)); // rezistență elastică dincolo de capete
+function indBounds() {
+  const bs = tabBtns(), w = tabInd.offsetWidth || bs[0].offsetWidth, last = bs[bs.length - 1];
+  return { min: bs[0].offsetLeft, max: last.offsetLeft + last.offsetWidth - w, w };
+}
 function tabDragTo(x) {
-  const bs = tabBtns(), r = tabsEl.getBoundingClientRect(), w = tabInd.offsetWidth || bs[0].offsetWidth;
-  const left = Math.min(bs[bs.length - 1].offsetLeft + bs[bs.length - 1].offsetWidth - w, Math.max(bs[0].offsetLeft, x - r.left - w / 2));
+  const r = tabsEl.getBoundingClientRect(), { min, max, w } = indBounds();
+  let left = x - r.left - w / 2;
+  if (left < min) left = min - rubber(min - left); else if (left > max) left = max + rubber(left - max);
+  // cu cât tragi mai repede, cu atât bula se lungește în direcția mișcării, ca un strop de lichid
+  const st = Math.min(Math.abs(tg ? tg.v : 0) * 0.14, 0.24);
   tabInd.style.left = left + 'px';
-  const over = btnAt(x); bs.forEach((b) => b.classList.toggle('hov', b === over));
+  tabInd.style.transform = `scale(${(1.22 * (1 + st)).toFixed(3)},${(1.22 * (1 - st * 0.45)).toFixed(3)})`;
+  const over = btnAt(Math.min(Math.max(x, r.left + min + w / 2), r.left + max + w / 2));
+  tabBtns().forEach((b) => b.classList.toggle('hov', b === over));
 }
 function tabDragStart() {
   if (!tg || tg.drag) return;
@@ -776,12 +959,15 @@ function tabDragStart() {
 }
 tabsEl.addEventListener('touchstart', (e) => {
   if (e.touches.length !== 1) { tg = null; return; }
-  const t = e.touches[0];
-  tg = { x: t.clientX, y: t.clientY, lx: t.clientX, drag: false, timer: setTimeout(tabDragStart, 230) };
+  const t = e.touches[0], now = performance.now();
+  tg = { x: t.clientX, y: t.clientY, lx: t.clientX, drag: false, v: 0, pts: [{ t: now, x: t.clientX }], timer: setTimeout(tabDragStart, 200) };
 }, { passive: true });
 tabsEl.addEventListener('touchmove', (e) => {
   if (!tg) return;
-  const t = e.touches[0]; tg.lx = t.clientX;
+  const t = e.touches[0], now = performance.now(), prev = tg.pts[tg.pts.length - 1];
+  const inst = (t.clientX - prev.x) / Math.max(1, now - prev.t);
+  tg.v = tg.v * 0.4 + inst * 0.6; tg.lx = t.clientX;
+  tg.pts.push({ t: now, x: t.clientX }); if (tg.pts.length > 8) tg.pts.shift();
   if (!tg.drag) {
     if (Math.abs(t.clientX - tg.x) > 6) tabDragStart();
     else if (Math.abs(t.clientY - tg.y) > 12) { clearTimeout(tg.timer); tg = null; return; }
@@ -795,8 +981,18 @@ function tabDragEnd(cancel) {
   if (!g.drag) return;
   tabClickBlock = true; setTimeout(() => { tabClickBlock = false; }, 450);
   tabsEl.classList.remove('dragging'); tabInd.classList.remove('drag');
-  const b = btnAt(g.lx); tabBtns().forEach((x) => x.classList.remove('hov'));
+  tabBtns().forEach((x) => x.classList.remove('hov'));
+  // inerție: din viteza ultimelor ~100 ms proiectăm unde „ar zbura” bula și ne oprim pe tab-ul cel mai apropiat
+  const end = g.pts[g.pts.length - 1], recent = g.pts.filter((p) => end.t - p.t <= 100 && end.t - performance.now() > -120);
+  const v = recent.length > 1 ? (end.x - recent[0].x) / Math.max(1, end.t - recent[0].t) : 0;
+  const fling = Math.abs(v) > 0.3;
+  const tw = tabBtns()[0].offsetWidth, throwX = fling ? Math.max(-2.3 * tw, Math.min(2.3 * tw, v * 130)) : 0; // cel mult ~2 tab-uri mai departe
+  const b = btnAt(g.lx + throwX);
+  tabInd.style.transition = fling ? 'left .6s cubic-bezier(.2,1.5,.4,1),width .3s,top .3s,height .3s,transform .45s cubic-bezier(.3,1.6,.5,1)'
+                                  : 'left .38s cubic-bezier(.3,1.35,.5,1),width .3s,top .3s,height .3s,transform .4s cubic-bezier(.3,1.6,.5,1)';
+  tabInd.style.transform = '';
   if (!cancel && b && b.dataset.tab !== ui.tab) A.tab({ tab: b.dataset.tab }); else placeInd();
+  clearTimeout(tabInd._t); tabInd._t = setTimeout(() => { tabInd.style.transition = ''; }, 650);
 }
 tabsEl.addEventListener('touchend', () => tabDragEnd(false));
 tabsEl.addEventListener('touchcancel', () => tabDragEnd(true));
@@ -812,11 +1008,10 @@ function renderView() {
 }
 function renderList() { const l = $('#list'); if (l) l.innerHTML = V[ui.tab].list(); if (ui.tab === 'search') observeMore(); }
 function renderHeadCounts() { // actualizează contoarele fără să pierdem focusul
-  if (ui.tab === 'movies' || ui.tab === 'tv') {
-    const seg = $('.top .seg'); if (!seg) return;
-    const tmp = document.createElement('div'); tmp.innerHTML = V[ui.tab].head();
-    seg.innerHTML = $('.seg', tmp).innerHTML;
-  }
+  if (ui.tab !== 'saved' && ui.tab !== 'fav') return;
+  const tmp = document.createElement('div'); tmp.innerHTML = V[ui.tab].head();
+  const now = document.querySelectorAll('.top .seg, .top .kind'), nw = tmp.querySelectorAll('.seg, .kind');
+  now.forEach((el, i) => { if (nw[i]) el.innerHTML = nw[i].innerHTML; });
 }
 function refresh() { renderHeadCounts(); renderList(); }
 
@@ -834,10 +1029,16 @@ function closeSheet(mode, fromPop) {
   s.style.transition = '';
   s.style.transform = mode === 'x' ? 'translateX(100%)' : '';
   s.classList.remove('open'); s.setAttribute('aria-hidden', 'true');
+  const clearSq = !!(ctx && ctx.clearSq);
   document.documentElement.classList.remove('lock'); ctx = null;
   setTimeout(() => { if (!s.classList.contains('open')) { s.style.transition = 'none'; s.style.transform = ''; if (!ctx) s.innerHTML = ''; } }, 320);
   if (!fromPop && history.state && history.state.sheet) { try { history.back(); } catch (e) {} }
   refresh();
+  if (clearSq && ui.sq) { // golim doar cuvintele căutate; filtrele rămân
+    ui.sq = ''; ui.sRes = null;
+    if (ui.tab === 'search') { renderView(); window.scrollTo(0, 0); }
+    runSearch(0);
+  }
   if (pendingReload) setTimeout(applyUpdate, 350);
 }
 window.addEventListener('popstate', () => closeSheet(null, true)); // butonul „înapoi” al sistemului / browserului
@@ -1053,14 +1254,33 @@ const A = {
     ui.tab = a.tab; ui.filter = ''; ui.sort = 'date'; renderView(); window.scrollTo(0, 0);
     if (ui.tab === 'search' && !ui.sRes) runSearch(0);
   },
+  kind(a) { if (ui.kind === a.k) return; ui.kind = a.k; ui.filter = ''; renderView(); },
+  fType(a) { ui.fType = a.t; renderView(); },
   mSeg(a) { ui.mSeg = a.seg; renderView(); },
   tSeg(a) { ui.tSeg = a.seg; renderView(); },
   sType(a) { ui.sType = a.t; ui.sRes = null; renderView(); runSearch(0); },
   sMore() { loadMore(); },
-  clrSq(a, el) { const i = el.parentElement.querySelector('input'); i.value = ''; ui.sq = ''; el.classList.add('hide'); i.focus(); runSearch(0); },
+  pickSort() { openPicker('Sortare', SORTS.map(([k, l]) => ({ v: k, l })), ui.f.sort, (v) => { ui.f.sort = v; applyFilters(); }); },
+  pickGenre() {
+    const t = ui.sType;
+    openPicker('Gen', [{ v: '', l: 'Toate genurile' }, ...GENRES.map((g) => ({ v: g.k, l: g.l,
+      dis: (t === 'tv' && g.t == null) || (t === 'movie' && g.m == null),
+      note: t === 'all' && g.t == null ? 'doar filme' : t === 'all' && g.m == null ? 'doar seriale' : '' }))], ui.f.genre, (v) => { ui.f.genre = v; applyFilters(); });
+  },
+  async pickProv() {
+    let list = [];
+    try { list = await providerList(); } catch (e) { return toast(errMsg(e)); }
+    const cn = (COUNTRIES.find(([k]) => k === COUNTRY()) || [0, COUNTRY()])[1];
+    openPicker(`Platformă · ${cn}`, [{ v: '', l: 'Toate platformele' }, ...list.map((p) => ({ v: String(p.id), l: p.name, img: IMG(p.logo, 'w92') }))], ui.f.prov,
+      (v) => { ui.f.prov = v; ui.f.provName = (list.find((p) => String(p.id) === v) || {}).name || ''; applyFilters(); });
+  },
+  pickYear() { openPicker('An', YEARS.map((y) => ({ v: y.k, l: y.l })), ui.f.year, (v) => { ui.f.year = v; applyFilters(); }); },
+  fToggle(a) { ui.f[a.f] = !ui.f[a.f]; applyFilters(); },
+  fReset() { ui.f = { sort: 'recent', genre: '', prov: '', provName: '', year: '', top7: false, hideSaved: false }; applyFilters(); },
+  clrSq(a, el) { const i = el.parentElement.querySelector('input'); i.value = ''; ui.sq = ''; el.classList.add('hide'); const fb = $('.fbar'); if (fb) fb.outerHTML = fbarHtml(); i.focus(); runSearch(0); },
   clrFilter(a, el) { const i = el.parentElement.querySelector('input'); i.value = ''; ui.filter = ''; el.classList.add('hide'); i.focus(); renderList(); },
   open(a) { openItem(a.key); },
-  openT(a) { openDetail(a.type, a.id); },
+  openT(a) { const q = !!ui.sq.trim(); openDetail(a.type, a.id); if (q && ctx) ctx.clearSq = true; }, // deschis din căutare după titlu → golim căsuța la ieșire
   close() { closeSheet(); },
   more(a, el) { el.classList.toggle('open'); },
   bannerOff() { ui.bannerOff = true; renderList(); },
@@ -1092,7 +1312,7 @@ const A = {
   },
   fav(a, el) {
     const it = curItem(); if (!it) return;
-    it.fav = !it.fav; touch(it); save();
+    it.fav = !it.fav; it.favAt = it.fav ? Date.now() : null; touch(it); save();
     el.classList.toggle('on', it.fav); el.innerHTML = heart(it.fav);
     el.classList.remove('pop'); void el.offsetWidth; if (it.fav) el.classList.add('pop');
     toast(it.fav ? '♥ Adăugat la preferate' : 'Scos de la preferate');
@@ -1196,7 +1416,7 @@ async function doBackup() {
   const name = `filme-backup-${today()}.json`;
   const files = [new File([data], name, { type: 'application/json' }), new File([data], name.replace('.json', '.txt'), { type: 'text/plain' })];
   const file = files.find((f) => navigator.canShare && navigator.canShare({ files: [f] })) || files[0];
-  const done = () => { db.settings.lastBackup = Date.now(); save(); if (ui.tab === 'settings' || ui.tab === 'movies' || ui.tab === 'tv') renderList(); };
+  const done = () => { db.settings.lastBackup = Date.now(); save(); if (ui.tab === 'settings' || ui.tab === 'saved' || ui.tab === 'fav') renderList(); };
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file], title: 'Backup Filmele mele' }); done(); toast('Backup salvat ✓'); return; }
     catch (e) { if (e.name === 'AbortError') return; }
@@ -1548,7 +1768,7 @@ document.addEventListener('input', (e) => {
   const v = e.target.value;
   if (k === 'filter' || k === 'sq') { const c = e.target.parentElement.querySelector('.clr'); if (c) c.classList.toggle('hide', !v); }
   if (k === 'filter') { ui.filter = v; renderList(); }
-  else if (k === 'sq') { ui.sq = v; runSearch(); }
+  else if (k === 'sq') { const was = !!ui.sq.trim(); ui.sq = v; if (was !== !!v.trim()) { const fb = $('.fbar'); if (fb) fb.outerHTML = fbarHtml(); } runSearch(); }
   else if (k === 'note') {
     const it = curItem(); if (!it) return;
     it.note = v; touch(it); clearTimeout(noteT); noteT = setTimeout(save, 400);
