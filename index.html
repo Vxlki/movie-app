@@ -26,6 +26,8 @@ body{padding-bottom:calc(72px + var(--safe-b));min-height:100vh;touch-action:man
 html.lock,html.lock body,html.plock,html.plock body{overflow:hidden}
 html,body{overscroll-behavior-y:none}
 html{overflow-x:hidden}
+#peek{position:fixed;left:0;top:0;width:100%;height:100%;overflow:hidden;pointer-events:none;display:none;z-index:1;will-change:transform}
+#peek.on{display:block}
 #sheet,.pk,.eggcard{overscroll-behavior:contain}
 button,input,select,textarea{font:inherit;color:inherit}
 button{background:none;border:0;padding:0;cursor:pointer}
@@ -1085,22 +1087,30 @@ window.addEventListener('resize', () => { indReady = false; placeInd(); });
     tabInd.style.transition = 'none';
     tabInd.style.left = (bs[i].offsetLeft + (bs[j].offsetLeft - bs[i].offsetLeft) * p) + 'px';
   }
-  function switchTo(tab, dir) {
+  // ecranul vecin e randat dinainte într-un strat separat și intră odată cu degetul
+  const peek = document.createElement('div'); peek.id = 'peek'; peek.setAttribute('aria-hidden', 'true'); document.body.appendChild(peek);
+  function buildPeek(tab) {
+    const v = V[tab];
+    peek.innerHTML = (v.head() + `<div>${v.list()}</div>`).replace(/\sid="/g, ' data-pid="'); // fără id-uri duplicate
+    peek.style.transition = 'none'; peek.classList.add('on');
+  }
+  function hidePeek() { peek.classList.remove('on'); peek.innerHTML = ''; peek.style.transition = ''; peek.style.transform = ''; }
+  function switchTo(tab, dir, ms) {
     busy = true;
-    view.style.transition = 'transform .17s cubic-bezier(.4,0,1,1)'; view.style.transform = `translateX(${dir * W()}px)`;
+    const tr = `transform ${ms}ms cubic-bezier(.2,.85,.3,1)`;
+    view.style.transition = tr; peek.style.transition = tr;
+    view.style.transform = `translateX(${dir * W()}px)`; peek.style.transform = 'translateX(0px)';
     tabInd.style.transition = '';
     setTimeout(() => {
-      view.style.transition = 'none'; view.style.transform = `translateX(${-dir * W()}px)`;
-      A.tab({ tab });
-      void view.offsetWidth;
-      view.style.transition = 'transform .34s cubic-bezier(.2,.9,.3,1)'; view.style.transform = '';
-      setTimeout(() => { view.style.transition = ''; busy = false; }, 360);
-    }, 170);
+      A.tab({ tab }); // conținutul real e identic cu cel din previzualizare, deci schimbarea nu se vede
+      view.style.transition = 'none'; view.style.transform = '';
+      hidePeek(); void view.offsetWidth; view.style.transition = ''; busy = false;
+    }, ms + 10);
   }
   document.addEventListener('touchstart', (e) => {
     if (busy || e.touches.length !== 1 || blocked(e.target)) { o = null; return; }
     const t = e.touches[0], now = performance.now();
-    o = { x: t.clientX, y: t.clientY, ly: t.clientY, lx: t.clientX, mode: null, anchor: 0, hOk: !noSwipe(e.target), pts: [{ t: now, x: t.clientX }] };
+    o = { x: t.clientX, y: t.clientY, ly: t.clientY, lx: t.clientX, mode: null, anchor: 0, pj: null, hOk: !noSwipe(e.target), pts: [{ t: now, x: t.clientX }] };
   }, { passive: true });
   document.addEventListener('touchmove', (e) => {
     if (!o || o.mode === 'none') return;
@@ -1117,8 +1127,10 @@ window.addEventListener('resize', () => { indReady = false; placeInd(); });
     if (o.mode === 'h') {
       const tabs = TABS(), i = tabs.indexOf(ui.tab), j = dx < 0 ? i + 1 : i - 1;
       const edge = j < 0 || j >= tabs.length;
+      if (!edge && o.pj !== j) { buildPeek(tabs[j]); o.pj = j; }
+      if (edge && o.pj != null) { hidePeek(); o.pj = null; }
       view.style.transition = 'none'; view.style.transform = `translateX(${(edge ? hrub(dx) : dx).toFixed(1)}px)`;
-      if (!edge) indTo(i, j, Math.min(1, Math.abs(dx) / W()));
+      if (!edge) { peek.style.transform = `translateX(${(dx + (dx < 0 ? W() : -W())).toFixed(1)}px)`; indTo(i, j, Math.min(1, Math.abs(dx) / W())); }
       return;
     }
     const d = t.clientY - o.anchor;
@@ -1133,8 +1145,14 @@ window.addEventListener('resize', () => { indReady = false; placeInd(); });
     const v = rec.length > 1 ? (last.x - rec[0].x) / Math.max(1, last.t - rec[0].t) : 0;
     const tabs = TABS(), i = tabs.indexOf(ui.tab), j = dx < 0 ? i + 1 : i - 1;
     const go = j >= 0 && j < tabs.length && (Math.abs(dx) > W() * 0.3 || (Math.abs(dx) > 40 && Math.abs(v) > 0.35 && Math.sign(v) === Math.sign(dx)));
-    if (go) return switchTo(tabs[j], dx < 0 ? -1 : 1);
-    view.style.transition = 'transform .45s cubic-bezier(.2,.9,.3,1.12)'; view.style.transform = '';
+    if (go) { // durata depinde de cât mai e de parcurs și de viteza degetului
+      const left = W() - Math.abs(dx), ms = Math.round(Math.max(180, Math.min(380, Math.abs(v) > 0.3 ? left / Math.abs(v) * 1.4 : left * 1.1)));
+      return switchTo(tabs[j], dx < 0 ? -1 : 1, ms);
+    }
+    const hasPeek = g.pj != null;
+    const tr = hasPeek ? 'transform .36s cubic-bezier(.2,.85,.3,1)' : 'transform .45s cubic-bezier(.2,.9,.3,1.12)';
+    view.style.transition = tr; view.style.transform = '';
+    if (hasPeek) { peek.style.transition = tr; peek.style.transform = `translateX(${dx < 0 ? W() : -W()}px)`; setTimeout(hidePeek, 380); }
     tabInd.style.transition = ''; placeInd();
     setTimeout(() => { view.style.transition = ''; }, 460);
   };
