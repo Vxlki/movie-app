@@ -1157,7 +1157,6 @@ V.settings = {
     const all = items();
     return `<div class="wrap">
       <div class="panel"><h3>Cheie TMDB</h3>
-        <p>Necesară pentru căutare, postere și episoade. Pui „API Key” sau „API Read Access Token” din contul tău TMDB (Settings → API).</p>
         ${db.settings.tmdbKey && !ui.keyEdit ? `
         <div class="keybox"><span class="keymask">${maskKey(db.settings.tmdbKey)}</span>
           <button class="btn keycopy" data-act="copyKey" aria-label="Copiază cheia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copiază</button></div>
@@ -1166,7 +1165,6 @@ V.settings = {
         <div class="row"><button class="btn pri" data-act="saveKey">Salvează și verifică</button>${db.settings.tmdbKey ? `<button class="btn" data-act="cancelKey">Renunță</button>` : ''}</div>`}
       </div>
       <div class="panel"><h3>Note IMDb · cheie OMDb <span class="hint">opțional</span></h3>
-        <p>IMDb nu are API gratuit, așa că nota IMDb (plus Rotten Tomatoes și Metacritic) vine prin <b>OMDb</b>. Cheia e gratuită: pe <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" rel="noopener">omdbapi.com/apikey.aspx</a> alegi „FREE”, pui emailul și primești cheia pe mail (trebuie activată din linkul din mail). Fără ea vezi nota TMDB și un link către IMDb.</p>
         ${db.settings.omdbKey && !ui.omdbEdit ? `
         <div class="keybox"><span class="keymask">${maskKey(db.settings.omdbKey)}</span></div>
         <div class="row"><button class="btn" data-act="editOmdb">Schimbă</button><button class="btn" data-act="testOmdb">Verifică</button><button class="btn danger" data-act="clearOmdb">Șterge</button></div>`
