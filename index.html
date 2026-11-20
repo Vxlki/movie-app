@@ -426,7 +426,7 @@ html.glass .egg.show{background:rgba(10,8,16,.4)}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '3.4';
+const APP_VERSION = '3.5';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
@@ -1468,43 +1468,51 @@ function closeSheet(mode, fromPop) {
   document.documentElement.classList.remove('lock'); ctx = null;
   setTimeout(() => { if (!s.classList.contains('open')) { s.style.transition = 'none'; s.style.transform = ''; if (!ctx) s.innerHTML = ''; } }, 320);
   if (!fromPop && history.state && history.state.sheet) { try { history.back(); } catch (e) {} }
-  refresh();
+  setTimeout(refresh, 330); // lista din spate se actualizează după animație, ca închiderea să fie fluidă
   if (clearSq && ui.sq) { // golim doar cuvintele căutate; filtrele rămân
     ui.sq = ''; ui.sRes = null;
-    if (ui.tab === 'search') { renderView(); window.scrollTo(0, 0); }
+    if (ui.tab === 'search') { setTimeout(() => { renderView(); window.scrollTo(0, 0); }, 330); }
     runSearch(0);
   }
   if (pendingReload) setTimeout(applyUpdate, 350);
 }
 window.addEventListener('popstate', () => closeSheet(null, true)); // butonul „înapoi” al sistemului / browserului
+let sheetDrag = false, sheetDragPending = false; // cât tragi de card, nu-l redesenăm (răspunsurile care vin între timp așteaptă)
 (() => { // gesturi: tragi în jos de sus sau glisezi de la marginea stângă ca să revii
-  const sh = $('#sheet'); let g = null;
+  const sh = $('#sheet'); let g = null, tgt = null;
   sh.addEventListener('scroll', syncSbar, { passive: true });
+  // ascultăm pe elementul atins: dacă între timp cardul se redesenează, evenimentele ajung tot la el (nu se mai „agață” gestul)
+  const unbind = () => { if (tgt) { tgt.removeEventListener('touchmove', move); tgt.removeEventListener('touchend', end); tgt.removeEventListener('touchcancel', end); tgt = null; } };
   sh.addEventListener('touchstart', (e) => {
+    unbind();
     if (e.touches.length !== 1 || !sh.classList.contains('open')) { g = null; return; }
     const t = e.touches[0];
     g = { x: t.clientX, y: t.clientY, top: sh.scrollTop <= 0, edge: t.clientX < 30, dx: 0, dy: 0, mode: null, t0: Date.now() };
+    tgt = e.target; tgt.addEventListener('touchmove', move, { passive: false }); tgt.addEventListener('touchend', end); tgt.addEventListener('touchcancel', end);
   }, { passive: true });
-  sh.addEventListener('touchmove', (e) => {
+  function move(e) {
     if (!g) return;
     const t = e.touches[0]; g.dx = t.clientX - g.x; g.dy = t.clientY - g.y;
     if (!g.mode) {
       if (g.edge && g.dx > 8 && g.dx > Math.abs(g.dy)) g.mode = 'x';
       else if (g.top && g.dy > 8 && g.dy > Math.abs(g.dx)) g.mode = 'y';
-      else if (Math.abs(g.dx) > 10 || Math.abs(g.dy) > 10) { g = null; return; }
+      else if (Math.abs(g.dx) > 10 || Math.abs(g.dy) > 10) { g = null; unbind(); return; }
       else return;
+      sheetDrag = true;
     }
     e.preventDefault();
     sh.style.transition = 'none';
     sh.style.transform = g.mode === 'y' ? `translateY(${Math.max(0, g.dy)}px)` : `translateX(${Math.max(0, g.dx)}px)`;
-  }, { passive: false });
-  const end = () => {
+  }
+  function end() {
+    unbind();
+    const wasDrag = sheetDrag; sheetDrag = false;
     if (!g || !g.mode) { g = null; return; }
     const d = g.mode === 'y' ? g.dy : g.dx, v = d / Math.max(1, Date.now() - g.t0), mode = g.mode; g = null;
     sh.style.transition = '';
-    if (d > 110 || (d > 30 && v > 0.5)) closeSheet(mode); else sh.style.transform = '';
-  };
-  sh.addEventListener('touchend', end); sh.addEventListener('touchcancel', end);
+    if (d > 110 || (d > 30 && v > 0.5)) { sheetDragPending = false; closeSheet(mode); }
+    else { sh.style.transform = ''; if (wasDrag && sheetDragPending) { sheetDragPending = false; renderSheet(); } }
+  }
 })();
 async function openDetail(type, id) {
   const key = `${type}:${id}`, it = db.items[key];
@@ -1822,6 +1830,7 @@ function sheetItem() { // elementul din listă sau o versiune temporară (nesalv
 }
 function renderSheet() {
   if (!ctx) return;
+  if (sheetDrag) { sheetDragPending = true; return; } // îl redesenăm după ce iei degetul
   if (ctx.imp) return renderImport();
   if (ctx.type === 'person') return renderPerson();
   const el = $('#sheet'), y = el.scrollTop;
