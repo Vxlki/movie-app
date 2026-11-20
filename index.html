@@ -265,6 +265,18 @@ html.swiping .card,html.swiping .season,html.swiping .chart,html.swiping .panel{
 .pn{font-size:12px;font-weight:650;margin-top:6px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .pc{font-size:11px;color:var(--mu);line-height:1.25;margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .trbtn{background:rgba(232,80,111,.16);color:#ff8aa3;border:1px solid rgba(232,80,111,.35)}
+/* actori */
+.person{cursor:pointer}
+.phero{min-height:calc(190px + var(--safe-t));background:linear-gradient(160deg,var(--s3),var(--s1))}
+.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 10px;margin-top:14px}
+.pgrid .tile .poster{width:100%;height:auto;aspect-ratio:2/3;border-radius:10px}
+.tile .ty.role{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.ptile .poster{aspect-ratio:1/1!important;border-radius:50%!important}
+.ptile{text-align:center}
+.ptile .tag{left:auto;right:4px}
+.pround{width:72px;height:72px;border-radius:50%;margin:6px}
+.favh{color:var(--rose)!important;font-size:16px}
+.lnk{display:block}
 /* titluri similare */
 .simrow{display:flex;gap:10px;overflow-x:auto;margin:0 -16px;padding:2px 16px 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .simrow::-webkit-scrollbar{display:none}
@@ -393,7 +405,7 @@ html.glass .egg.show{background:rgba(10,8,16,.4)}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '3.0';
+const APP_VERSION = '3.1';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
@@ -417,9 +429,9 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 function load() {
   try {
     const d = JSON.parse(localStorage.getItem(STORE_KEY));
-    if (d && d.items) { d.settings = Object.assign({ tmdbKey: '', lastBackup: null }, d.settings); d.secrets = d.secrets || {}; return d; }
+    if (d && d.items) { d.settings = Object.assign({ tmdbKey: '', lastBackup: null }, d.settings); d.secrets = d.secrets || {}; d.people = d.people || {}; return d; }
   } catch (e) {}
-  return { v: 1, items: {}, settings: { tmdbKey: '', lastBackup: null }, secrets: {} };
+  return { v: 1, items: {}, settings: { tmdbKey: '', lastBackup: null }, secrets: {}, people: {} };
 }
 let db = load();
 document.documentElement.classList.toggle('glass', db.settings.theme !== 'classic');
@@ -737,18 +749,23 @@ function tvList() {
 /* ---------- ecran: Preferate (filme + seriale) ---------- */
 V.fav = {
   head() {
-    const all = items().filter((i) => i.fav);
-    const n = (t) => (t === 'all' ? all.length : all.filter((i) => i.type === t).length);
+    const all = items().filter((i) => i.fav), np = Object.keys(db.people || {}).length;
+    const n = (t) => (t === 'all' ? all.length + np : t === 'person' ? np : all.filter((i) => i.type === t).length);
     return `<div class="top"><h1>Preferate</h1>
-      <div class="seg">${[['all', 'Toate'], ['movie', 'Filme'], ['tv', 'Seriale']].map(([k, l]) => `<button class="${ui.fType === k ? 'on' : ''}" data-act="fType" data-t="${k}">${l}<span class="n">${n(k)}</span></button>`).join('')}</div>
+      <div class="seg">${[['all', 'Toate'], ['movie', 'Filme'], ['tv', 'Seriale'], ['person', 'Actori']].map(([k, l]) => `<button class="${ui.fType === k ? 'on' : ''}" data-act="fType" data-t="${k}">${l}<span class="n">${n(k)}</span></button>`).join('')}</div>
       <div class="tools">${filterInput('Filtrează…')}${sortSelect()}</div></div>`;
   },
   list() {
-    const list = items().filter((i) => i.fav && (ui.fType === 'all' || i.type === ui.fType) && matches(i));
-    list.sort(ui.sort === 'date' ? (a, b) => (b.favAt || b.updatedAt) - (a.favAt || a.updatedAt) : sorter());
+    const q = norm(ui.filter.trim());
+    const people = ui.fType === 'all' || ui.fType === 'person'
+      ? Object.values(db.people || {}).filter((pp) => !q || norm(pp.name).includes(q)).map((pp) => ({ ...pp, _person: true, title: pp.name })) : [];
+    const titles = ui.fType === 'person' ? [] : items().filter((i) => i.fav && (ui.fType === 'all' || i.type === ui.fType) && matches(i));
+    const list = titles.concat(people);
+    list.sort(ui.sort === 'date' ? (a, b) => (b.favAt || b.updatedAt || 0) - (a.favAt || a.updatedAt || 0)
+      : ui.sort === 'title' ? (a, b) => a.title.localeCompare(b.title, 'ro') : (a, b) => (b.rating || 0) - (a.rating || 0) || a.title.localeCompare(b.title, 'ro'));
     if (!list.length) return ui.filter ? `<div class="empty">Niciun rezultat.</div>`
-      : `<div class="empty"><b>Niciun preferat încă</b>Deschide un film sau un serial din listele tale și apasă ♥ din colțul din dreapta sus.</div>`;
-    return wrapList(vlist(cardRows(list, (it) => (it.type === 'movie' ? movieCard(it, true) : tvCard(it, true)))));
+      : `<div class="empty"><b>${ui.fType === 'person' ? 'Niciun actor preferat încă' : 'Niciun preferat încă'}</b>${ui.fType === 'person' ? 'Deschide pagina unui actor (din distribuția unui film sau din Caută → Actori) și apasă ♥.' : 'Apasă ♥ în colțul din dreapta sus pe pagina unui film, serial sau actor.'}</div>`;
+    return wrapList(vlist(cardRows(list, (it) => (it._person ? personCard(it) : it.type === 'movie' ? movieCard(it, true) : tvCard(it, true)))));
   }
 };
 
@@ -776,6 +793,7 @@ const sf = () => ui.f;
 function saveFilters() { db.settings.sf = ui.f; save(); }
 const fActive = () => !!(ui.f.genre || ui.f.prov || ui.f.year || ui.f.top7 || ui.f.hideSaved || ui.f.sort !== 'recent');
 function fbarHtml() {
+  if (ui.sType === 'person') return `<div class="fbar"></div>`; // la actori nu există filtre
   const f = sf(), q = !!ui.sq.trim();
   const chip = (act, label, on, extra = '') => `<button class="fchip${on ? ' on' : ''}" data-act="${act}" ${extra}>${label}</button>`;
   const g = GENRES.find((x) => x.k === f.genre), y = YEARS.find((x) => x.k === f.year);
@@ -791,9 +809,10 @@ function fbarHtml() {
 }
 V.search = {
   head() {
-    const t = [['all', 'Toate'], ['movie', 'Filme'], ['tv', 'Seriale']];
+    const t = [['all', 'Toate'], ['movie', 'Filme'], ['tv', 'Seriale'], ['person', 'Actori']];
+    const ph = ui.sType === 'person' ? 'Numele actorului…' : ui.sType === 'all' ? 'Titlu sau actor…' : 'Titlu…';
     return `<div class="top"><h1>Caută</h1>
-      <div class="sbox"><input class="field" type="search" placeholder="Titlu de film sau serial…" value="${esc(ui.sq)}" data-in="sq" autocomplete="off" enterkeyhint="search">${clrBtn(ui.sq, 'clrSq')}</div>
+      <div class="sbox"><input class="field" type="search" placeholder="${ph}" value="${esc(ui.sq)}" data-in="sq" autocomplete="off" enterkeyhint="search">${clrBtn(ui.sq, 'clrSq')}</div>
       <div class="seg" style="margin-top:10px">${t.map(([k, l]) => `<button class="${ui.sType === k ? 'on' : ''}" data-act="sType" data-t="${k}">${l}</button>`).join('')}</div>
       ${fbarHtml()}</div>`;
   },
@@ -803,13 +822,14 @@ V.search = {
     if (ui.sLoading && !ui.sRes) return `<div class="wrap"><div class="spin">Se caută…</div></div>`;
     if (ui.sErr) return `<div class="wrap"><div class="empty">${esc(ui.sErr)}</div>${manual}</div>`;
     const res = ui.sRes || [];
-    if (!res.length && ui.sRes) return `<div class="wrap"><div class="empty">${ui.sq.trim() ? `Niciun rezultat pentru „${esc(ui.sq)}”${fActive() ? ' cu filtrele alese' : ''}.` : 'Niciun titlu pentru filtrele alese.'}
-      ${fActive() ? '<br><br><button class="btn" data-act="fReset">Resetează filtrele</button>' : ''}</div>${manual}</div>`;
-    return `<div class="wrap">${resTitle()}${vlist(gridRows(), { kind: 'search', onRange: searchRange })}${moreHtml()}${manual}</div>`;
+    if (!res.length && ui.sRes) return `<div class="wrap"><div class="empty">${ui.sq.trim() ? `Niciun ${ui.sType === 'person' ? 'actor' : 'titlu'} găsit pentru „${esc(ui.sq)}”${fActive() && ui.sType !== 'person' ? ' cu filtrele alese' : ''}.` : 'Niciun titlu pentru filtrele alese.'}
+      ${fActive() ? '<br><br><button class="btn" data-act="fReset">Resetează filtrele</button>' : ''}</div>${peopleStripHtml()}${manual}</div>`;
+    return `<div class="wrap">${peopleStripHtml()}${resTitle()}${vlist(gridRows(), { kind: 'search', onRange: searchRange })}${moreHtml()}${manual}</div>`;
   }
 };
 function resTitle() {
-  if (ui.sq.trim()) return '';
+  if (ui.sType === 'person') return ui.sq.trim() ? '' : `<div class="group">Actori populari</div>`;
+  if (ui.sq.trim()) return (ui.sPeople && ui.sPeople.length) || ui.sTop ? `<div class="group">Titluri</div>` : '';
   const f = sf(), parts = [SORTS.find(([k]) => k === f.sort)[1]];
   const g = GENRES.find((x) => x.k === f.genre); if (g) parts.push(g.l);
   if (f.prov) parts.push(f.provName); if (f.year) parts.push((YEARS.find((x) => x.k === f.year) || {}).l);
@@ -821,7 +841,7 @@ function resTitle() {
 }
 function gridRows() { // rânduri de câte 3 postere, cu înălțime calculată din lățimea ecranului
   const res = ui.sRes || [], cw = Math.min(window.innerWidth, 1000) - 32, tw = (cw - 20) / 3;
-  const rowH = Math.round(tw * 1.5 + 5 + 31 + 17 + 14), rows = [];
+  const rowH = Math.round(tw * (ui.sType === 'person' ? 1 : 1.5) + 5 + 31 + 17 + 14), rows = []; // actorii: poze rotunde (pătrate)
   for (let i = 0; i < res.length; i += 3) {
     const a = i;
     rows.push({ h: rowH, html: () => `<div class="grow" style="height:${rowH}px">${(ui.sRes || []).slice(a, a + 3).map(tileHtml).join('')}</div>` });
@@ -852,7 +872,29 @@ async function reloadPage(m) {
     if (ui.tab === 'search') vlRedraw();
   } catch (e) {} finally { m.loading = false; }
 }
+function peopleStripHtml() { // la căutarea după nume: actorii găsiți + filmele celui mai potrivit
+  if (ui.sType !== 'all' || !ui.sq.trim()) return '';
+  let h = '';
+  if (ui.sTop && ui.sTop.list.length) {
+    const p = ui.sTop.person;
+    h += `<div class="sec" style="margin-top:6px"><h3>Cu ${esc(p.name)}</h3><div class="simrow">${ui.sTop.list.map((x) => {
+      const t = x.title || x.name, it = db.items[`${x.media_type}:${x.id}`];
+      return `<div class="sim" data-act="openT" data-type="${x.media_type}" data-id="${x.id}">${it ? `<span class="tag in">${esc((x.media_type === 'movie' ? MOVIE_ST : TV_ST)[it.status])}</span>` : ''}${poster(x.poster_path, t, '', 'w185')}
+        <div class="tt">${esc(t)}</div><div class="ty">${(x.release_date || x.first_air_date || '').slice(0, 4)}${(x.roles || [])[0] ? ' · ' + esc(x.roles[0]) : ''}</div></div>`;
+    }).join('')}</div><button class="lnk" data-act="openP" data-id="${p.id}">Toată filmografia lui ${esc(p.name)} ›</button></div>`;
+  }
+  if (ui.sPeople && ui.sPeople.length) h += `<div class="sec"${h ? '' : ' style="margin-top:6px"'}><h3>Actori</h3><div class="cast">${ui.sPeople.map((p) => `
+    <div class="person" data-act="openP" data-id="${p.id}">${p.profile_path ? `<img src="${IMG(p.profile_path, 'w185')}" alt="" loading="lazy">` : `<div class="pph">${esc(initials(p.name))}</div>`}
+      <div class="pn">${esc(p.name)}</div><div class="pc">${esc(deptLabel(p))}</div></div>`).join('')}</div></div>`;
+  return h;
+}
+function personTile(r) {
+  const kf = (r.known_for || []).map((x) => x.title || x.name).filter(Boolean)[0] || deptLabel(r);
+  return `<div class="tile ptile" data-act="openP" data-id="${r.id}">${db.people[r.id] ? '<span class="tag in">♥</span>' : ''}${r.profile_path ? `<img class="poster" loading="lazy" src="${IMG(r.profile_path, 'w185')}" alt="" onerror="this.removeAttribute('src')">` : `<div class="poster ph">${esc(initials(r.name))}</div>`}
+    <div class="tt">${esc(r.name)}</div><div class="ty">${esc(kf)}</div></div>`;
+}
 function tileHtml(r) {
+  if (r && !r._stub && r.media_type === 'person') return personTile(r);
   if (!r || r._stub) return `<div class="tile skel"><div class="poster ph"></div><div class="tt"></div><div class="ty"></div></div>`;
   const type = r.media_type, key = `${type}:${r.id}`, it = db.items[key];
   const t = r.title || r.name, y = (r.release_date || r.first_air_date || '').slice(0, 4);
@@ -889,6 +931,7 @@ function discoverParams(type) {
 }
 function passClient(r, isQuery) { // filtre aplicate pe telefon (la căutarea după titlu și pentru „Ascunde salvate”)
   const f = sf();
+  if (r.media_type === 'person') return true;
   if (f.hideSaved && db.items[`${r.media_type}:${r.id}`]) return false;
   if (!isQuery) return true;
   const g = GENRES.find((x) => x.k === f.genre);
@@ -900,7 +943,13 @@ function passClient(r, isQuery) { // filtre aplicate pe telefon (la căutarea du
 }
 async function fetchSearch(page, raw = false) { // raw: fără filtrele locale (pentru reîncărcarea unei pagini)
   const q = ui.sq.trim(), t = ui.sType;
-  let res = [], total = 1;
+  let res = [], total = 1, people = [];
+  if (t === 'person') { // actori: căutare după nume sau cei mai populari
+    const j = q ? await tmdb('/search/person', { query: q, include_adult: 'false', page }) : await tmdb('/person/popular', { page });
+    res = (j.results || []).map((r) => ({ ...r, media_type: 'person' }));
+    res.forEach((r) => personPreview.set(r.id, r));
+    return { res, total: Math.min(j.total_pages || 1, 500), people };
+  }
   if (!q) {
     const types = t === 'all' ? ['movie', 'tv'] : [t];
     const parts = await Promise.all(types.map(async (ty) => {
@@ -914,11 +963,12 @@ async function fetchSearch(page, raw = false) { // raw: fără filtrele locale (
   } else {
     const j = t === 'all' ? await tmdb('/search/multi', { query: q, include_adult: 'false', page }) : await tmdb(`/search/${t}`, { query: q, include_adult: 'false', page });
     res = (j.results || []).map((r) => ({ ...r, media_type: r.media_type || t }));
+    people = res.filter((r) => r.media_type === 'person').slice(0, 12); people.forEach((r) => personPreview.set(r.id, r));
     total = j.total_pages || 1;
   }
   res = res.filter((r) => (r.media_type === 'movie' || r.media_type === 'tv') && (raw || passClient(r, !!q)));
   if (!raw) res.forEach((r) => searchPreview.set(`${r.media_type}:${r.id}`, r));
-  return { res, total: Math.min(total, 500) };
+  return { res, total: Math.min(total, 500), people };
 }
 let sTimer, sSeq = 0;
 function runSearch(delay = 350) {
@@ -927,11 +977,23 @@ function runSearch(delay = 350) {
     if (!db.settings.tmdbKey) return;
     const seq = ++sSeq;
     ui.sLoading = true; ui.sErr = ''; ui.sMore = false; ui.sMoreErr = false;
+    if (!ui.sq.trim()) { ui.sPeople = []; ui.sTop = null; }
     try {
-      let page = 1, { res, total } = await fetchSearch(1);
+      let page = 1, { res, total, people } = await fetchSearch(1);
       while (!res.length && page < total && page < 4) { page++; ({ res, total } = await fetchSearch(page)); } // filtrele pot goli o pagină
+      // căutare după un nume de actor: arătăm direct filmele lui
+      let top = null; const q = norm(ui.sq.trim());
+      const best = q.length >= 3 && (people || []).find((p) => norm(p.name).includes(q) || q.includes(norm(p.name)));
+      if (best) {
+        try {
+          const c = await tmdb(`/person/${best.id}/combined_credits`);
+          const list = personCredits(best, c).filter((x) => x.poster_path).sort((a, b) => (b.popularity || 0) - (a.popularity || 0)).slice(0, 15);
+          top = { person: best, list };
+        } catch (e) {}
+      }
       if (seq !== sSeq) return;
       ui.sRes = res; ui.sPage = page; ui.sTotal = total; ui.sMeta = [{ p: page, s: 0, e: res.length }];
+      ui.sPeople = people || []; ui.sTop = top;
     } catch (e) { if (seq !== sSeq) return; ui.sErr = errMsg(e); ui.sRes = null; }
     ui.sLoading = false;
     if (ui.tab === 'search') { renderList(); window.scrollTo(0, 0); }
@@ -1421,6 +1483,85 @@ async function openDetail(type, id) {
     loadProviders(type, id, key); loadExtras(type, id, key);
   } catch (e) { if (ctx && ctx.key === key) { ctx.err = errMsg(e); renderSheet(); } }
 }
+/* ---------- pagina de actor ---------- */
+const personPreview = new Map(); // id -> date sumare din căutare / distribuție (afișate până vin detaliile)
+const openAny = (type, id) => (type === 'person' ? openPerson(id) : openDetail(type, id));
+const DEPT = { Directing: 'Regizor', Writing: 'Scenarist', Production: 'Producător', Sound: 'Compozitor', Camera: 'Director de imagine', Editing: 'Montaj' };
+const deptLabel = (p) => (!p ? '' : (p.known_for_department || p.dept || 'Acting') === 'Acting' ? (p.gender === 1 ? 'Actriță' : p.gender === 2 ? 'Actor' : 'Actor / Actriță') : (DEPT[p.known_for_department || p.dept] || p.known_for_department || p.dept));
+async function openPerson(id) {
+  id = Number(id); const key = `person:${id}`;
+  ctx = { key, type: 'person', tmdbId: id, person: personPreview.get(id) || db.people[id] && { name: db.people[id].name, profile_path: db.people[id].photo } || null, credits: null, pType: 'all', pSort: 'pop', pAll: false, err: '' };
+  showSheet(); renderSheet();
+  try {
+    const [d, c] = await Promise.all([tmdb(`/person/${id}`), tmdb(`/person/${id}/combined_credits`)]);
+    let bio = d.biography;
+    if (!bio) { try { bio = (await tmdb(`/person/${id}`, { language: 'en-US' })).biography || ''; } catch (e) {} }
+    if (!ctx || ctx.key !== key) return;
+    ctx.person = { ...d, biography: bio }; ctx.credits = personCredits(d, c);
+    const fp = db.people[id]; if (fp) { Object.assign(fp, { name: d.name, photo: d.profile_path || fp.photo, dept: d.known_for_department || fp.dept, gender: d.gender }); save(); }
+    renderSheet();
+  } catch (e) { if (ctx && ctx.key === key) { ctx.err = errMsg(e); renderSheet(); } }
+}
+function personCredits(d, c) {
+  const acting = (d.known_for_department || 'Acting') === 'Acting';
+  let list = (acting ? c.cast : c.crew) || []; if (!list.length) list = (c.cast || []).concat(c.crew || []);
+  const map = new Map();
+  for (const x of list) {
+    if (x.media_type !== 'movie' && x.media_type !== 'tv') continue;
+    if ((x.genre_ids || []).some((g) => g === 10767 || g === 10763)) continue; // fără talk-show-uri și știri
+    const k = `${x.media_type}:${x.id}`, o = map.get(k), role = x.character || x.job || '';
+    if (o) { if (role && !o.roles.includes(role)) o.roles.push(role); o.eps = Math.max(o.eps, x.episode_count || 0); }
+    else map.set(k, { ...x, roles: role ? [role] : [], eps: x.episode_count || 0 });
+  }
+  const out = [...map.values()]; out.forEach((x) => searchPreview.set(`${x.media_type}:${x.id}`, x));
+  return out;
+}
+function lifeLine(p) {
+  if (!p || !p.birthday) return '';
+  const b = new Date(p.birthday + 'T12:00:00'), e = p.deathday ? new Date(p.deathday + 'T12:00:00') : new Date();
+  let age = e.getFullYear() - b.getFullYear(); if (e < new Date(e.getFullYear(), b.getMonth(), b.getDate())) age--;
+  return p.deathday ? `${fmtDate(p.birthday)} – ${fmtDate(p.deathday)} (${age} ani)` : `Născut${p.gender === 1 ? 'ă' : ''} pe ${fmtDate(p.birthday)} · ${age} ani`;
+}
+function creditTile(x) {
+  const t = x.title || x.name, date = x.release_date || x.first_air_date || '', it = db.items[`${x.media_type}:${x.id}`];
+  const role = (x.roles || [])[0] || '';
+  const tag = it ? `<span class="tag in">${esc((x.media_type === 'movie' ? MOVIE_ST : TV_ST)[it.status])}</span>` : `<span class="tag">${x.media_type === 'movie' ? 'Film' : 'Serial'}</span>`;
+  return `<div class="tile" data-act="openSim" data-type="${x.media_type}" data-id="${x.id}">${tag}${poster(x.poster_path, t, '', 'w185')}
+    <div class="tt">${esc(t)}</div><div class="ty role">${date ? date.slice(0, 4) : 'în curând'}${role ? ' · ' + esc(role) : ''}</div></div>`;
+}
+function renderPerson() {
+  const el = $('#sheet'), y = el.scrollTop, p = ctx.person || {}, fav = !!db.people[ctx.tmdbId], name = p.name || '…';
+  let h = `<div class="sbar"><button class="back" data-act="close">${BACK}</button><span class="sbt">${esc(name)}</span></div>
+    <div class="hero phero"><div class="grab"></div><button class="back" data-act="close">${BACK}</button>
+      <button class="favb${fav ? ' on' : ''}" data-act="favP" aria-label="Actor preferat">${heart(fav)}</button></div>
+    <div class="head">${p.profile_path ? `<img class="poster big" src="${IMG(p.profile_path, 'w342')}" alt="">` : `<div class="poster big ph">${esc(initials(name))}</div>`}
+      <div class="meta"><h2>${esc(name)}</h2><div class="sub">${esc(deptLabel(p))}</div>${lifeLine(p) ? `<div class="sub">${esc(lifeLine(p))}</div>` : ''}${p.place_of_birth ? `<div class="sub">${esc(p.place_of_birth)}</div>` : ''}</div></div>
+    <div class="body">`;
+  if (ctx.err) h += `<p class="muted">${esc(ctx.err)}</p>`;
+  if (!ctx.credits) { if (!ctx.err) h += `<div class="spin">Se încarcă filmografia…</div>`; }
+  else {
+    if (p.biography) h += `<p class="ov" data-act="more">${esc(p.biography)}</p>`;
+    const all = ctx.credits, n = (t) => (t === 'all' ? all.length : all.filter((x) => x.media_type === t).length);
+    let list = all.filter((x) => ctx.pType === 'all' || x.media_type === ctx.pType);
+    const dt = (x) => x.release_date || x.first_air_date || '9999';
+    if (ctx.pSort === 'new') list.sort((a, b) => dt(b).localeCompare(dt(a)));
+    else if (ctx.pSort === 'top') list.sort((a, b) => ((b.vote_count || 0) >= 50) - ((a.vote_count || 0) >= 50) || (b.vote_average || 0) - (a.vote_average || 0));
+    else list.sort((a, b) => (b.popularity || 0) * (1 + (b.eps || 0) / 20) - (a.popularity || 0) * (1 + (a.eps || 0) / 20));
+    const shown = ctx.pAll ? list : list.slice(0, 30);
+    h += `<div class="sec"><h3>Filmografie · ${all.length}</h3>
+      <div class="seg">${[['all', 'Toate'], ['movie', 'Filme'], ['tv', 'Seriale']].map(([k, l]) => `<button class="${ctx.pType === k ? 'on' : ''}" data-act="pType" data-t="${k}">${l}<span class="n">${n(k)}</span></button>`).join('')}</div>
+      <div class="chips" style="margin-top:10px">${[['pop', 'Cele mai cunoscute'], ['new', 'Cele mai noi'], ['top', 'Nota cea mai mare']].map(([k, l]) => `<button class="${ctx.pSort === k ? 'on' : ''}" data-act="pSort" data-s="${k}">${l}</button>`).join('')}</div>
+      ${shown.length ? `<div class="pgrid">${shown.map(creditTile).join('')}</div>` : '<p class="muted">Nimic aici.</p>'}
+      ${list.length > shown.length ? `<button class="btn block" style="margin-top:14px" data-act="pAll">Arată toate (${list.length})</button>` : ''}</div>`;
+  }
+  h += `</div>`;
+  el.innerHTML = h; el.scrollTop = y; syncSbar();
+}
+function personCard(pp) { // card de actor în Preferate
+  return `<div class="card" data-act="openP" data-id="${pp.id}">${pp.photo ? `<img class="poster pround" src="${IMG(pp.photo, 'w185')}" alt="" loading="lazy" onerror="this.removeAttribute('src')">` : `<div class="poster ph pround">${esc(initials(pp.name))}</div>`}
+    <div class="meta"><div class="t">${esc(pp.name)}</div><div class="sub">${esc(deptLabel(pp))}</div></div><div class="score none favh">♥</div></div>`;
+}
+
 /* ---------- trailer + distribuție ---------- */
 async function loadExtras(type, id, key) {
   const [v, c, r] = await Promise.all([
@@ -1439,6 +1580,7 @@ async function loadExtras(type, id, key) {
   ctx.similar = sim.slice(0, 16).map((x) => ({ ...x, media_type: type }));
   ctx.similar.forEach((x) => searchPreview.set(`${type}:${x.id}`, x));
   ctx.trailer = pickTrailer((v && v.results) || []);
+  ((c && c.cast) || []).slice(0, 20).forEach((p) => personPreview.set(p.id, p));
   ctx.cast = ((c && c.cast) || []).slice(0, 20).map((p) => ({
     id: p.id, name: p.name, photo: p.profile_path,
     role: p.character || (p.roles && p.roles[0] && p.roles[0].character) || '',
@@ -1463,7 +1605,7 @@ function trailerBtn() {
 function castHtml() {
   if (!ctx || !ctx.cast || !ctx.cast.length) return '';
   return `<div class="sec"><h3>Distribuție</h3><div class="cast">${ctx.cast.map((p) => `
-    <div class="person">${p.photo ? `<img src="${IMG(p.photo, 'w185')}" alt="" loading="lazy">` : `<div class="pph">${esc(initials(p.name))}</div>`}
+    <div class="person" data-act="openP" data-id="${p.id}">${p.photo ? `<img src="${IMG(p.photo, 'w185')}" alt="" loading="lazy">` : `<div class="pph">${esc(initials(p.name))}</div>`}
       <div class="pn">${esc(p.name)}</div>${p.role ? `<div class="pc">${esc(p.role)}</div>` : ''}${p.eps > 1 ? `<div class="pc">${p.eps} ep.</div>` : ''}</div>`).join('')}</div></div>`;
 }
 function similarHtml() {
@@ -1537,6 +1679,7 @@ function sheetItem() { // elementul din listă sau o versiune temporară (nesalv
 function renderSheet() {
   if (!ctx) return;
   if (ctx.imp) return renderImport();
+  if (ctx.type === 'person') return renderPerson();
   const el = $('#sheet'), y = el.scrollTop;
   const { it, saved, partial } = sheetItem();
   if (!it) { el.innerHTML = `<div class="hero"><div class="grab"></div><button class="back" data-act="close">${BACK}</button></div><div class="body"><div class="spin">${ctx.err ? esc(ctx.err) : 'Se încarcă…'}</div></div>`; return; }
@@ -1664,7 +1807,7 @@ const A = {
   aSeg(a) { ui.aSeg = a.seg; renderView(); },
   mSeg(a) { ui.mSeg = a.seg; renderView(); },
   tSeg(a) { ui.tSeg = a.seg; renderView(); },
-  sType(a) { ui.sType = a.t; ui.sRes = null; renderView(); runSearch(0); },
+  sType(a) { ui.sType = a.t; ui.sRes = null; ui.sPeople = []; ui.sTop = null; renderView(); runSearch(0); },
   sMore() { loadMore(); },
   pickSort() { openPicker('Sortare', SORTS.map(([k, l]) => ({ v: k, l })), ui.f.sort, (v) => { ui.f.sort = v; applyFilters(); }); },
   pickGenre() {
@@ -1688,7 +1831,7 @@ const A = {
   open(a) { openItem(a.key); },
   openT(a) { const q = !!ui.sq.trim(); openDetail(a.type, a.id); if (q && ctx) ctx.clearSq = true; }, // deschis din căutare după titlu → golim căsuța la ieșire
   close() {
-    if (sheetStack.length) { const p = sheetStack.pop(); const clr = ctx && ctx.clearSq; openDetail(p.type, p.id); if (clr && ctx) ctx.clearSq = true; return; }
+    if (sheetStack.length) { const p = sheetStack.pop(); const clr = ctx && ctx.clearSq; openAny(p.type, p.id); if (clr && ctx) ctx.clearSq = true; return; }
     closeSheet();
   },
   openSim(a) {
@@ -1697,6 +1840,24 @@ const A = {
     const clr = ctx.clearSq; openDetail(a.type, a.id); if (clr && ctx) ctx.clearSq = true;
   },
   more(a, el) { el.classList.toggle('open'); },
+  openP(a) { // actor: din distribuție / similare (în card) sau din liste
+    const inSheet = $('#sheet').classList.contains('open') && ctx && ctx.tmdbId;
+    const clr = inSheet ? ctx.clearSq : !!ui.sq.trim() && ui.tab === 'search';
+    if (inSheet) { sheetStack.push({ type: ctx.type, id: ctx.tmdbId }); if (sheetStack.length > 20) sheetStack.shift(); }
+    openPerson(a.id); if (clr && ctx) ctx.clearSq = true;
+  },
+  favP(a, el) {
+    if (!ctx || ctx.type !== 'person') return;
+    const id = ctx.tmdbId, p = ctx.person || {};
+    if (db.people[id]) delete db.people[id];
+    else db.people[id] = { id, name: p.name || '', photo: p.profile_path || null, dept: p.known_for_department || 'Acting', gender: p.gender || 0, favAt: Date.now() };
+    save(); const on = !!db.people[id];
+    el.classList.toggle('on', on); el.innerHTML = heart(on); el.classList.remove('pop'); void el.offsetWidth; if (on) el.classList.add('pop');
+    toast(on ? '♥ Actor adăugat la preferate' : 'Scos de la preferate');
+  },
+  pType(a) { ctx.pType = a.t; ctx.pAll = false; renderSheet(); },
+  pSort(a) { ctx.pSort = a.s; renderSheet(); },
+  pAll() { ctx.pAll = true; renderSheet(); },
   bannerOff() { ui.bannerOff = true; renderList(); },
   goSettings() { A.tab({ tab: 'settings' }); },
   manual() { openManual(); },
@@ -1859,7 +2020,7 @@ $('#restoreFile').addEventListener('change', async (e) => {
     if (!d || typeof d.items !== 'object') throw new Error('format');
     const n = Object.keys(d.items).length, cur = items().length;
     if (!confirm(`Backup din ${d.exportedAt ? fmtDate(d.exportedAt.slice(0, 10)) : '?'} cu ${n} titluri.\nÎnlocuiești datele actuale (${cur} titluri)?`)) return;
-    db = { v: 1, items: d.items, settings: Object.assign({ tmdbKey: '', lastBackup: null }, d.settings), secrets: Object.assign({}, db.secrets, d.secrets) };
+    db = { v: 1, items: d.items, people: d.people || {}, settings: Object.assign({ tmdbKey: '', lastBackup: null }, d.settings), secrets: Object.assign({}, db.secrets, d.secrets) };
     db.settings.lastBackup = Date.now(); save(); apiCache.clear(); ui.sRes = null; renderView(); toast('Date restaurate ✓');
   } catch (err) { toast('Fișierul nu e un backup valid'); }
 });
