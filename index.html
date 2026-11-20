@@ -426,7 +426,7 @@ html.glass .egg.show{background:rgba(10,8,16,.4)}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '3.7';
+const APP_VERSION = '3.8';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
@@ -475,12 +475,12 @@ async function tmdb(path, params = {}) {
   if (key.length > 60) opt.headers.Authorization = 'Bearer ' + key; // API Read Access Token
   else u.searchParams.set('api_key', key);                            // API Key
   const ck = u.toString();
-  if (apiCache.has(ck)) { const v = apiCache.get(ck); apiCache.delete(ck); apiCache.set(ck, v); return v; }
+  if (apiCache.has(ck)) { const v = apiCache.get(ck); if (Date.now() - v.t < 30 * 60e3) { apiCache.delete(ck); apiCache.set(ck, v); return v.j; } apiCache.delete(ck); }
   const r = await fetch(u, opt);
   if (r.status === 401) throw new Error('BADKEY');
   if (!r.ok) throw new Error('HTTP' + r.status);
   const j = await r.json();
-  apiCache.set(ck, j); if (apiCache.size > 40) apiCache.delete(apiCache.keys().next().value); // max. 40 de răspunsuri în memorie
+  apiCache.set(ck, { j, t: Date.now() }); if (apiCache.size > 250) apiCache.delete(apiCache.keys().next().value); // ultimele 250 de răspunsuri, 30 de minute
   return j;
 }
 async function getDetails(type, id) {
@@ -878,7 +878,7 @@ function gridRows() { // rânduri de câte 3 postere, cu înălțime calculată 
 // paginile de rezultate departe de ecran (în afara celor ~3 ecrane desenate) se șterg din memorie
 // și rămân doar ca „ciot” (id + tip); când ajungi iar la ele, pagina se cere din nou de la TMDB
 function searchRange(rowA, rowB) {
-  if (!ui.sRes || !ui.sMeta) return;
+  if (!ui.sRes || !ui.sMeta || ui.sRes.length < 3000) return; // sub 3000 de rezultate (~3 MB) le ținem pe toate în memorie
   const a = rowA * 3, b = rowB * 3;
   for (const m of ui.sMeta) {
     const near = m.e > a - 6 && m.s < b + 6;
@@ -998,7 +998,31 @@ async function fetchSearch(page, raw = false) { // raw: fără filtrele locale (
   return { res, total: Math.min(total, 500), people };
 }
 let sTimer, sSeq = 0;
+const sCache = new Map(), S_TTL = 30 * 60e3; // ultimele căutări, ținute în RAM 30 de minute
+let sCurKey = null;
+const sKey = () => JSON.stringify([ui.sType, norm(ui.sq.trim()), ui.sType === 'person' ? 0 : ui.f, LANG(), COUNTRY()]);
+function sRemember() { // salvează starea curentă (rezultate + poziția în pagină)
+  if (!sCurKey || !ui.sRes || ui.sErr) return;
+  const scroll = ui.tab === 'search' ? window.scrollY : ((sCache.get(sCurKey) || {}).scroll || 0);
+  sCache.delete(sCurKey);
+  sCache.set(sCurKey, { t: Date.now(), scroll, sRes: ui.sRes, sPage: ui.sPage, sTotal: ui.sTotal, sMeta: ui.sMeta, sPeople: ui.sPeople, sTop: ui.sTop });
+  while (sCache.size > 12) sCache.delete(sCache.keys().next().value);
+}
+function sRestore() { // true dacă rezultatele erau deja în memorie
+  const k = sKey(), c = sCache.get(k);
+  if (!c || Date.now() - c.t > S_TTL) return false;
+  clearTimeout(sTimer); ++sSeq;
+  let res = c.sRes;
+  if (ui.f.hideSaved && ui.sType !== 'person') res = res.filter((r) => r._stub || !db.items[`${r.media_type}:${r.id}`]); // între timp poate ai salvat ceva
+  ui.sRes = res; ui.sPage = c.sPage; ui.sTotal = c.sTotal; ui.sMeta = res === c.sRes ? c.sMeta : [];
+  ui.sPeople = c.sPeople || []; ui.sTop = c.sTop || null; ui.sLoading = false; ui.sErr = ''; ui.sMore = false; ui.sMoreErr = false;
+  sCurKey = k; ui.sScroll = c.scroll || 0;
+  return true;
+}
 function runSearch(delay = 350) {
+  sRemember();
+  if (sRestore()) { if (ui.tab === 'search') { renderList(); window.scrollTo(0, ui.sScroll); } return; }
+  sCurKey = null;
   clearTimeout(sTimer);
   sTimer = setTimeout(async () => {
     if (!db.settings.tmdbKey) return;
@@ -1020,7 +1044,7 @@ function runSearch(delay = 350) {
       }
       if (seq !== sSeq) return;
       ui.sRes = res; ui.sPage = page; ui.sTotal = total; ui.sMeta = [{ p: page, s: 0, e: res.length }];
-      ui.sPeople = people || []; ui.sTop = top;
+      ui.sPeople = people || []; ui.sTop = top; sCurKey = sKey(); sRemember();
     } catch (e) { if (seq !== sSeq) return; ui.sErr = errMsg(e); ui.sRes = null; }
     ui.sLoading = false;
     if (ui.tab === 'search') { renderList(); window.scrollTo(0, 0); }
@@ -1095,6 +1119,7 @@ async function loadMore() {
     const fresh = res.filter((r) => !have.has(`${r.media_type}:${r.id}`));
     const start = ui.sRes.length;
     ui.sRes.push(...fresh); ui.sPage++; ui.sTotal = total;
+    const sc = sCurKey && sCache.get(sCurKey); if (sc && sc.sRes === ui.sRes) { sc.sPage = ui.sPage; sc.sTotal = total; sc.t = Date.now(); }
     (ui.sMeta = ui.sMeta || []).push({ p: ui.sPage, s: start, e: ui.sRes.length });
     if (vlCur && vlCur.kind === 'search') vlSetRows(vlCur, gridRows()); // doar se prelungește lista; blocurile vizibile rămân
   } catch (e) { if (seq === sSeq) ui.sMoreErr = true; }
@@ -1472,9 +1497,9 @@ function closeSheet(mode, fromPop) {
   if (!fromPop && history.state && history.state.sheet) { try { history.back(); } catch (e) {} }
   setTimeout(refresh, 330); // lista din spate se actualizează după animație, ca închiderea să fie fluidă
   if (clearSq && ui.sq) { // golim doar cuvintele căutate; filtrele rămân
-    ui.sq = ''; ui.sRes = null;
-    if (ui.tab === 'search') { setTimeout(() => { renderView(); window.scrollTo(0, 0); }, 330); }
-    runSearch(0);
+    sRemember(); ui.sq = '';
+    if (sRestore()) { if (ui.tab === 'search') setTimeout(() => { renderView(); window.scrollTo(0, ui.sScroll); }, 330); } // din memorie, fără cereri
+    else { ui.sRes = null; if (ui.tab === 'search') setTimeout(() => { renderView(); window.scrollTo(0, 0); }, 330); runSearch(0); }
   }
   if (pendingReload) setTimeout(applyUpdate, 350);
 }
@@ -2128,7 +2153,7 @@ const A = {
   async saveKey() {
     const v = $('#keyIn').value.trim();
     if (!v) return toast('Lipește cheia întâi');
-    db.settings.tmdbKey = v; ui.keyEdit = false; save(); apiCache.clear(); ui.sRes = null; renderList();
+    db.settings.tmdbKey = v; ui.keyEdit = false; save(); apiCache.clear(); sCache.clear(); ui.sRes = null; renderList();
     try { await tmdb('/configuration'); toast('Cheia funcționează ✓'); }
     catch (e) { toast(errMsg(e)); }
   },
@@ -2151,7 +2176,7 @@ const A = {
   setTheme(a) { db.settings.theme = a.t; save(); document.documentElement.classList.toggle('glass', a.t !== 'classic'); renderList(); indReady = false; placeInd(); },
   async setLang(a) {
     if (LANG() === a.l) return;
-    db.settings.lang = a.l; save(); apiCache.clear(); ui.sRes = null; renderList();
+    db.settings.lang = a.l; save(); apiCache.clear(); sCache.clear(); ui.sRes = null; renderList();
     const list = items().filter((i) => i.tmdbId);
     if (!list.length || !db.settings.tmdbKey) return toast('Limba a fost schimbată');
     toast(`Actualizez titlurile (${list.length})…`);
@@ -2211,7 +2236,7 @@ $('#restoreFile').addEventListener('change', async (e) => {
     const n = Object.keys(d.items).length, cur = items().length;
     if (!confirm(`Backup din ${d.exportedAt ? fmtDate(d.exportedAt.slice(0, 10)) : '?'} cu ${n} titluri.\nÎnlocuiești datele actuale (${cur} titluri)?`)) return;
     db = { v: 1, items: d.items, people: d.people || {}, settings: Object.assign({ tmdbKey: '', lastBackup: null }, d.settings), secrets: Object.assign({}, db.secrets, d.secrets) };
-    db.settings.lastBackup = Date.now(); save(); apiCache.clear(); ui.sRes = null; renderView(); toast('Date restaurate ✓');
+    db.settings.lastBackup = Date.now(); save(); apiCache.clear(); sCache.clear(); ui.sRes = null; renderView(); toast('Date restaurate ✓');
   } catch (err) { toast('Fișierul nu e un backup valid'); }
 });
 
