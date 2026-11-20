@@ -426,7 +426,7 @@ html.glass .egg.show{background:rgba(10,8,16,.4)}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '3.6';
+const APP_VERSION = '3.7';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
@@ -1614,12 +1614,13 @@ function personCard(pp) { // card de actor în Preferate
 
 /* ---------- trailer + distribuție ---------- */
 async function loadExtras(type, id, key) {
-  const [v, c, r, rv, ex] = await Promise.all([
+  const [v, c, r, rv, ex, c2] = await Promise.all([
     tmdb(`/${type}/${id}/videos`, { include_video_language: `${LANG().slice(0, 2)},en,null` }).catch(() => null),
-    tmdb(type === 'tv' ? `/tv/${id}/aggregate_credits` : `/movie/${id}/credits`).catch(() => null),
+    tmdb(`/${type}/${id}/credits`).catch(() => null), // la seriale: distribuția serialului (ca la filme)
     tmdb(`/${type}/${id}/recommendations`).catch(() => null),
     tmdb(`/${type}/${id}/reviews`, { language: 'en-US' }).catch(() => null), // recenziile de pe TMDB sunt aproape toate în engleză
-    tmdb(`/${type}/${id}/external_ids`).catch(() => null)
+    tmdb(`/${type}/${id}/external_ids`).catch(() => null),
+    type === 'tv' ? tmdb(`/tv/${id}/aggregate_credits`).catch(() => null) : null // rezervă: toți actorii din toate sezoanele
   ]);
   if (!ctx || ctx.key !== key) return;
   ctx.reviews = ((rv && rv.results) || []).filter((x) => (x.content || '').trim()).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
@@ -1635,12 +1636,14 @@ async function loadExtras(type, id, key) {
   ctx.similar = sim.slice(0, 16).map((x) => ({ ...x, media_type: type }));
   ctx.similar.forEach((x) => searchPreview.set(`${type}:${x.id}`, x));
   ctx.trailer = pickTrailer((v && v.results) || []);
-  ((c && c.cast) || []).slice(0, 20).forEach((p) => personPreview.set(p.id, p));
-  ctx.cast = ((c && c.cast) || []).slice(0, 20).map((p) => ({
-    id: p.id, name: p.name, photo: p.profile_path,
-    role: p.character || (p.roles && p.roles[0] && p.roles[0].character) || '',
-    eps: p.total_episode_count || 0
-  }));
+  // distribuția titlului; la seriale, dacă lipsește, luăm actorii din toate sezoanele (cei cu cele mai multe episoade primii)
+  let cast = (c && c.cast) || [];
+  if (!cast.length && c2 && c2.cast) cast = c2.cast.slice().sort((a, b) => (b.total_episode_count || 0) - (a.total_episode_count || 0));
+  cast = cast.slice(0, 20); cast.forEach((p) => personPreview.set(p.id, p));
+  ctx.cast = cast.map((p) => ({ id: p.id, name: p.name, photo: p.profile_path,
+    role: p.character || ((p.roles || []).slice().sort((a, b) => (b.episode_count || 0) - (a.episode_count || 0))[0] || {}).character || '' }));
+  if (!ctx.cast.length && ctx.d && ctx.d.created_by && ctx.d.created_by.length) // documentare fără actori: arătăm creatorii
+    ctx.cast = ctx.d.created_by.map((p) => ({ id: p.id, name: p.name, photo: p.profile_path, role: 'Creator' }));
   renderSheet();
 }
 /* ---------- note IMDb / Rotten Tomatoes / Metacritic (prin OMDb) + recenzii ---------- */
@@ -1760,7 +1763,7 @@ function castHtml() {
   if (!ctx || !ctx.cast || !ctx.cast.length) return '';
   return `<div class="sec"><h3>Distribuție</h3><div class="cast">${ctx.cast.map((p) => `
     <div class="person" data-act="openP" data-id="${p.id}">${p.photo ? `<img src="${IMG(p.photo, 'w185')}" alt="" loading="lazy">` : `<div class="pph">${esc(initials(p.name))}</div>`}
-      <div class="pn">${esc(p.name)}</div>${p.role ? `<div class="pc">${esc(p.role)}</div>` : ''}${p.eps > 1 ? `<div class="pc">${p.eps} ep.</div>` : ''}</div>`).join('')}</div></div>`;
+      <div class="pn">${esc(p.name)}</div>${p.role ? `<div class="pc">${esc(p.role)}</div>` : ''}</div>`).join('')}</div></div>`;
 }
 function similarHtml() {
   if (!ctx || !ctx.similar || !ctx.similar.length) return '';
