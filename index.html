@@ -265,6 +265,25 @@ html.swiping .card,html.swiping .season,html.swiping .chart,html.swiping .panel{
 .pn{font-size:12px;font-weight:650;margin-top:6px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .pc{font-size:11px;color:var(--mu);line-height:1.25;margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .trbtn{background:rgba(232,80,111,.16);color:#ff8aa3;border:1px solid rgba(232,80,111,.35)}
+/* note și recenzii */
+.rchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.rchip{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:700;color:var(--tx);background:var(--s2);border:1px solid var(--line);border-radius:8px;padding:4px 8px;text-decoration:none;line-height:1.1}
+.rchip b{font-size:11px;font-weight:800;letter-spacing:.02em}
+.rchip i{font-style:normal;font-weight:500;font-size:11px;color:var(--mut)}
+.rchip.imdb b{background:#f5c518;color:#000;border-radius:4px;padding:2px 4px}
+.rchip.mc b{background:#66cc33;color:#000;border-radius:4px;padding:2px 4px}
+.rchip.tm b{background:#01b4e4;color:#032541;border-radius:4px;padding:2px 4px}
+.rchip.dim{opacity:.6}
+.hint{font-weight:500;text-transform:none;letter-spacing:0;color:var(--mut);font-size:12px;margin-left:4px}
+.rev{background:var(--s1);border:1px solid var(--line);border-radius:14px;padding:12px;margin-top:10px}
+.rh{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.rh .meta{flex:1;min-width:0}.rh .t{font-weight:650;font-size:14px}
+.rav{position:relative;width:34px;height:34px;border-radius:50%;background:var(--s3);display:grid;place-items:center;font-size:12px;font-weight:700;overflow:hidden;flex:none}
+.rav img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.rstar{color:var(--gold);font-weight:750;font-size:14px}.rstar i{font-style:normal;color:var(--mut);font-size:11px;font-weight:500}
+.rvt{white-space:pre-line;font-size:14px;-webkit-line-clamp:6}
+html.glass .rev{background:var(--glass);border-color:var(--gline)}
+html.glass .rchip{background:var(--glass);border-color:var(--gline)}
 /* actori */
 .person{cursor:pointer}
 .phero{min-height:calc(190px + var(--safe-t));background:linear-gradient(160deg,var(--s3),var(--s1))}
@@ -405,7 +424,7 @@ html.glass .egg.show{background:rgba(10,8,16,.4)}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '3.1';
+const APP_VERSION = '3.2';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
@@ -475,6 +494,8 @@ function errMsg(e) {
   if (!navigator.onLine) return 'Ești offline.';
   if (e.message === 'NOKEY') return 'Adaugă cheia TMDB în Setări.';
   if (e.message === 'BADKEY') return 'Cheia TMDB nu e validă. Verific-o în Setări.';
+  if (e.message === 'OMDBKEY') return 'Cheia OMDb nu e validă sau nu e activată (verifică mailul de la OMDb).';
+  if (e.message === 'OMDBLIMIT') return 'Ai atins limita zilnică OMDb (1.000 de cereri). Revine mâine.';
   return 'Nu am putut contacta TMDB. Încearcă din nou.';
 }
 
@@ -1144,6 +1165,14 @@ V.settings = {
         : `<input class="field keyin" style="width:100%" id="keyIn" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Lipește cheia aici">
         <div class="row"><button class="btn pri" data-act="saveKey">Salvează și verifică</button>${db.settings.tmdbKey ? `<button class="btn" data-act="cancelKey">Renunță</button>` : ''}</div>`}
       </div>
+      <div class="panel"><h3>Note IMDb · cheie OMDb <span class="hint">opțional</span></h3>
+        <p>IMDb nu are API gratuit, așa că nota IMDb (plus Rotten Tomatoes și Metacritic) vine prin <b>OMDb</b>. Cheia e gratuită: pe <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" rel="noopener">omdbapi.com/apikey.aspx</a> alegi „FREE”, pui emailul și primești cheia pe mail (trebuie activată din linkul din mail). Fără ea vezi nota TMDB și un link către IMDb.</p>
+        ${db.settings.omdbKey && !ui.omdbEdit ? `
+        <div class="keybox"><span class="keymask">${maskKey(db.settings.omdbKey)}</span></div>
+        <div class="row"><button class="btn" data-act="editOmdb">Schimbă</button><button class="btn" data-act="testOmdb">Verifică</button><button class="btn danger" data-act="clearOmdb">Șterge</button></div>`
+        : `<input class="field keyin" style="width:100%" id="omdbIn" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Cheia OMDb (8 caractere)">
+        <div class="row"><button class="btn pri" data-act="saveOmdb">Salvează și verifică</button>${db.settings.omdbKey ? `<button class="btn" data-act="cancelOmdb">Renunță</button>` : ''}</div>`}
+      </div>
       <div class="panel"><h3>Aspect</h3>
         <p>Liquid Glass imită stilul aplicațiilor iPhone: suprafețe translucide și bara de jos plutitoare.</p>
         <div class="chips">${[['glass', 'Liquid Glass'], ['classic', 'Clasic']].map(([k, l]) => `<button class="${(db.settings.theme || 'glass') === k ? 'on' : ''}" data-act="setTheme" data-t="${k}">${l}</button>`).join('')}</div>
@@ -1564,12 +1593,17 @@ function personCard(pp) { // card de actor în Preferate
 
 /* ---------- trailer + distribuție ---------- */
 async function loadExtras(type, id, key) {
-  const [v, c, r] = await Promise.all([
+  const [v, c, r, rv, ex] = await Promise.all([
     tmdb(`/${type}/${id}/videos`, { include_video_language: `${LANG().slice(0, 2)},en,null` }).catch(() => null),
     tmdb(type === 'tv' ? `/tv/${id}/aggregate_credits` : `/movie/${id}/credits`).catch(() => null),
-    tmdb(`/${type}/${id}/recommendations`).catch(() => null)
+    tmdb(`/${type}/${id}/recommendations`).catch(() => null),
+    tmdb(`/${type}/${id}/reviews`, { language: 'en-US' }).catch(() => null), // recenziile de pe TMDB sunt aproape toate în engleză
+    tmdb(`/${type}/${id}/external_ids`).catch(() => null)
   ]);
   if (!ctx || ctx.key !== key) return;
+  ctx.reviews = ((rv && rv.results) || []).filter((x) => (x.content || '').trim()).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  ctx.imdbId = (ex && ex.imdb_id) || (ctx.d && ctx.d.imdb_id) || null;
+  if (ctx.imdbId) loadOmdb(ctx.imdbId, key);
   let sim = ((r && r.results) || []).filter((x) => x.poster_path);
   if (sim.length < 4) { // puține recomandări: completăm cu titluri „asemănătoare” (după gen și cuvinte-cheie)
     const s2 = await tmdb(`/${type}/${id}/similar`).catch(() => null);
@@ -1587,6 +1621,65 @@ async function loadExtras(type, id, key) {
     eps: p.total_episode_count || 0
   }));
   renderSheet();
+}
+/* ---------- note IMDb / Rotten Tomatoes / Metacritic (prin OMDb) + recenzii ---------- */
+const OMDB_CACHE = 'filme.omdb', OMDB_TTL = 3 * 864e5; // notele se păstrează 3 zile pe telefon, ca să nu consumăm cererile zilnice
+function omdbCache() { try { return JSON.parse(localStorage.getItem(OMDB_CACHE)) || {}; } catch (e) { return {}; } }
+async function omdb(imdbId, fresh = false) {
+  const key = (db.settings.omdbKey || '').trim(); if (!key) throw new Error('NOKEY');
+  const c = omdbCache(), hit = c[imdbId];
+  if (!fresh && hit && Date.now() - hit.t < OMDB_TTL) return hit.r;
+  const u = new URL('https://www.omdbapi.com/'); u.searchParams.set('i', imdbId); u.searchParams.set('apikey', key);
+  const res = await fetch(u); let j = null; try { j = await res.json(); } catch (e) {}
+  if (!j) throw new Error('HTTP' + res.status);
+  if (j.Response === 'False') {
+    if (/invalid api key|no api key/i.test(j.Error || '')) throw new Error('OMDBKEY');
+    if (/limit/i.test(j.Error || '')) throw new Error('OMDBLIMIT');
+    if (/not found/i.test(j.Error || '')) j = {};
+    else throw new Error(j.Error || 'OMDB');
+  }
+  const num = (x) => (x && x !== 'N/A' ? x : null);
+  const rt = ((j.Ratings || []).find((x) => x.Source === 'Rotten Tomatoes') || {}).Value;
+  const r = { imdb: num(j.imdbRating), votes: num(j.imdbVotes), rt: num(rt), mc: num(j.Metascore) };
+  c[imdbId] = { t: Date.now(), r };
+  const ks = Object.keys(c); if (ks.length > 400) ks.sort((a, b) => c[a].t - c[b].t).slice(0, ks.length - 400).forEach((k) => delete c[k]);
+  try { localStorage.setItem(OMDB_CACHE, JSON.stringify(c)); } catch (e) {}
+  return r;
+}
+async function loadOmdb(imdbId, key) {
+  if (!db.settings.omdbKey) return;
+  ctx.omdb = 'loading';
+  try { const r = await omdb(imdbId); if (ctx && ctx.key === key) { ctx.omdb = r; renderSheet(); } }
+  catch (e) { if (ctx && ctx.key === key) { ctx.omdb = { err: e.message }; renderSheet(); } }
+}
+const fmtVotes = (v) => { const n = Number(String(v || '').replace(/[^\d]/g, '')); return !n ? '' : n >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',') + ' mil.' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n); };
+function ratingsHtml() {
+  if (!ctx || !ctx.tmdbId) return '';
+  const d = ctx.d || {}, o = ctx.omdb, imdbUrl = ctx.imdbId ? `https://www.imdb.com/title/${ctx.imdbId}/` : '';
+  const out = [];
+  if (o && o.imdb) out.push(`<a class="rchip imdb" href="${imdbUrl}" target="_blank" rel="noopener"><b>IMDb</b>${o.imdb}${o.votes ? `<i>${fmtVotes(o.votes)}</i>` : ''}</a>`);
+  else if (o === 'loading') out.push(`<span class="rchip imdb dim"><b>IMDb</b>…</span>`);
+  else if (imdbUrl) out.push(`<a class="rchip imdb" href="${imdbUrl}" target="_blank" rel="noopener"><b>IMDb</b>${o && o.err === 'OMDBLIMIT' ? 'limită zilnică' : '›'}</a>`);
+  if (o && o.rt) out.push(`<span class="rchip rt" title="Rotten Tomatoes"><b>${parseInt(o.rt, 10) >= 60 ? '🍅' : '🤢'}</b>${esc(o.rt)}</span>`);
+  if (o && o.mc) out.push(`<span class="rchip mc" title="Metacritic"><b>MC</b>${esc(o.mc)}</span>`);
+  if (d.vote_average && d.vote_count > 20) out.push(`<span class="rchip tm"><b>TMDB</b>${d.vote_average.toFixed(1)}</span>`);
+  return out.length ? `<div class="rchips">${out.join('')}</div>` : '';
+}
+function revText(t) { // recenziile vin cu markdown/HTML simplu: le curățăm
+  return String(t || '').replace(/\r/g, '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\*\*|__/g, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+function reviewsHtml() {
+  if (!ctx || !ctx.tmdbId || ctx.reviews === undefined) return '';
+  const list = ctx.reviews, imdb = ctx.imdbId ? `https://www.imdb.com/title/${ctx.imdbId}/reviews/` : '';
+  const link = imdb ? `<a class="lnk" href="${imdb}" target="_blank" rel="noopener">${list.length ? 'Mai multe recenzii pe IMDb ›' : 'Citește recenziile de pe IMDb ›'}</a>` : '';
+  if (!list.length) return imdb ? `<div class="sec"><h3>Recenzii</h3><p class="muted" style="margin:0 0 4px">Nicio recenzie pe TMDB încă.</p>${link}</div>` : '';
+  const shown = ctx.revAll ? list : list.slice(0, 3);
+  return `<div class="sec"><h3>Recenzii · ${list.length} <span class="hint">în engleză, de pe TMDB</span></h3>${shown.map((x) => {
+    const a = x.author_details || {}, name = a.name || x.author || a.username || 'Anonim', rt = a.rating;
+    const av = a.avatar_path && !/^\/https?:/.test(a.avatar_path) ? `<img src="${IMG(a.avatar_path, 'w92')}" alt="" loading="lazy" onerror="this.remove()">` : '';
+    return `<div class="rev"><div class="rh"><div class="rav">${av}<span>${esc(initials(name))}</span></div><div class="meta"><div class="t">${esc(name)}</div><div class="small">${x.created_at ? fmtDate(x.created_at.slice(0, 10)) : ''}</div></div>${rt ? `<span class="rstar">★ ${rt}<i>/10</i></span>` : ''}</div>
+      <p class="ov rvt" data-act="more">${esc(revText(x.content))}</p></div>`;
+  }).join('')}${list.length > shown.length ? `<button class="btn block" style="margin-top:10px" data-act="revAll">Arată toate (${list.length})</button>` : ''}${link}</div>`;
 }
 function pickTrailer(list) { // cel mai bun: trailer oficial de pe YouTube, în limba aleasă sau în engleză, cel mai recent
   const lang = LANG().slice(0, 2);
@@ -1695,7 +1788,7 @@ function renderSheet() {
     <div class="hero" ${bd}><div class="grab"></div><button class="back" data-act="close">${BACK}</button>${saved ? `<button class="favb${it.fav ? ' on' : ''}" data-act="fav" aria-label="Preferat">${heart(it.fav)}</button>` : ''}</div>
     <div class="head">${poster(it.poster, it.title, 'big', 'w342')}<div class="meta">
       <h2>${esc(it.title)}</h2>${(() => { const o = [...new Set([it.altTitle, it.originalTitle].filter((x) => x && x !== it.title))]; return o.length ? `<div class="orig">${o.map(esc).join(' · ')}</div>` : ''; })()}
-      <div class="sub">${esc(info)}</div>${genres ? `<div class="sub">${esc(genres)}</div>` : ''}</div></div>
+      <div class="sub">${esc(info)}</div>${genres ? `<div class="sub">${esc(genres)}</div>` : ''}${ratingsHtml()}</div></div>
     <div class="body">`;
   if (it.overview) h += `<p class="ov" data-act="more">${esc(it.overview)}</p>`;
   h += trailerBtn();
@@ -1752,6 +1845,7 @@ function renderSheet() {
     if (saved && p.t && p.w < p.t) h += `<button class="btn block" style="margin-top:10px" data-act="allEps">✓ Marchează tot serialul ca văzut</button>`;
     h += `</div>`;
   }
+  h += reviewsHtml();
   h += similarHtml();
   if (saved) h += `<div class="sec"><button class="btn danger block" data-act="del">Șterge din listă</button></div>`;
   h += `</div>`;
@@ -1858,6 +1952,16 @@ const A = {
   pType(a) { ctx.pType = a.t; ctx.pAll = false; renderSheet(); },
   pSort(a) { ctx.pSort = a.s; renderSheet(); },
   pAll() { ctx.pAll = true; renderSheet(); },
+  revAll() { ctx.revAll = true; renderSheet(); },
+  async saveOmdb() {
+    const v = $('#omdbIn').value.trim(); if (!v) return toast('Lipește cheia întâi');
+    db.settings.omdbKey = v; ui.omdbEdit = false; save(); renderList();
+    try { await omdb('tt0111161', true); toast('Cheia OMDb funcționează ✓'); } catch (e) { toast(errMsg(e)); }
+  },
+  editOmdb() { ui.omdbEdit = true; renderList(); const i = $('#omdbIn'); if (i) i.focus(); },
+  cancelOmdb() { ui.omdbEdit = false; renderList(); },
+  async testOmdb() { try { await omdb('tt0111161', true); toast('Cheia OMDb funcționează ✓'); } catch (e) { toast(errMsg(e)); } },
+  clearOmdb() { if (!confirm('Ștergi cheia OMDb de pe acest telefon?')) return; db.settings.omdbKey = ''; ui.omdbEdit = false; save(); renderList(); toast('Cheie ștearsă'); },
   bannerOff() { ui.bannerOff = true; renderList(); },
   goSettings() { A.tab({ tab: 'settings' }); },
   manual() { openManual(); },
