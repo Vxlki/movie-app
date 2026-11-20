@@ -26,8 +26,11 @@ body{padding-bottom:calc(72px + var(--safe-b));min-height:100vh;touch-action:man
 html.lock,html.lock body,html.plock,html.plock body{overflow:hidden}
 html,body{overscroll-behavior-y:none}
 html{overflow-x:hidden}
-#peek{position:fixed;left:0;top:0;width:100%;height:100%;overflow:hidden;pointer-events:none;display:none;z-index:1;will-change:transform}
-#peek.on{display:block}
+.peek{position:fixed;left:0;top:0;width:100%;height:100%;overflow:hidden;pointer-events:none;display:none;z-index:1;will-change:transform;contain:layout paint}
+.peek.on{display:block}
+/* în timpul glisării renunțăm la blur-ul antetelor (scump de recalculat la fiecare cadru) */
+html.swiping .top,html.glass.swiping .top{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:rgba(20,17,28,.94)!important}
+html.swiping .tag{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 #sheet,.pk,.eggcard{overscroll-behavior:contain}
 button,input,select,textarea{font:inherit;color:inherit}
 button{background:none;border:0;padding:0;cursor:pointer}
@@ -242,6 +245,17 @@ input[type=date].field{width:100%;-webkit-appearance:none;min-height:44px}
 .keycopy{flex:0 0 auto;padding:9px 12px;font-size:14px}
 .keycopy svg{width:16px;height:16px}
 .keyin{-webkit-text-security:disc;font-family:ui-monospace,Menlo,monospace}
+/* liste virtuale */
+.vl{position:relative}
+.vb{position:absolute;left:0;right:0}
+.vb .card{height:104px;margin:0 0 8px;overflow:hidden}
+.vb .group{height:28px;margin:12px 2px 4px;display:flex;align-items:flex-end}
+.vb .t1{-webkit-line-clamp:1}
+.grow{display:grid;grid-template-columns:repeat(3,1fr);gap:0 10px;align-items:start;overflow:hidden}
+.grow .tile .tt{height:31px}
+.tile.skel .poster{width:100%;height:auto;aspect-ratio:2/3}
+.tile.skel .tt{background:var(--s2);border-radius:5px;height:12px;margin-top:8px;width:80%}
+html.swiping .card,html.swiping .season,html.swiping .chart,html.swiping .panel{box-shadow:none!important}
 /* căsuță de căutare cu buton de ștergere */
 .sbox{position:relative;flex:1;min-width:0;display:flex}
 .sbox .field{flex:1;width:100%;padding-right:40px}
@@ -349,7 +363,7 @@ html.glass .egg.show{background:rgba(10,8,16,.4)}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '2.8';
+const APP_VERSION = '2.9';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
@@ -398,12 +412,12 @@ async function tmdb(path, params = {}) {
   if (key.length > 60) opt.headers.Authorization = 'Bearer ' + key; // API Read Access Token
   else u.searchParams.set('api_key', key);                            // API Key
   const ck = u.toString();
-  if (apiCache.has(ck)) return apiCache.get(ck);
+  if (apiCache.has(ck)) { const v = apiCache.get(ck); apiCache.delete(ck); apiCache.set(ck, v); return v; }
   const r = await fetch(u, opt);
   if (r.status === 401) throw new Error('BADKEY');
   if (!r.ok) throw new Error('HTTP' + r.status);
   const j = await r.json();
-  apiCache.set(ck, j);
+  apiCache.set(ck, j); if (apiCache.size > 40) apiCache.delete(apiCache.keys().next().value); // max. 40 de răspunsuri în memorie
   return j;
 }
 async function getDetails(type, id) {
@@ -560,6 +574,62 @@ const sortSelect = () => `<select class="field" data-in="sort">
 const clrBtn = (v, act) => `<button class="clr${v ? '' : ' hide'}" data-act="${act}" aria-label="Șterge textul">✕</button>`;
 const filterInput = (ph) => `<div class="sbox"><input class="field" type="search" placeholder="${ph}" value="${esc(ui.filter)}" data-in="filter" autocomplete="off">${clrBtn(ui.filter, 'clrFilter')}</div>`;
 
+/* ---------- liste virtuale ----------
+   În pagină stau doar ~3 ecrane de rânduri (cel vizibil + unul deasupra + unul dedesubt).
+   Restul se șterg din pagină (și pozele lor din memorie) și se redesenează când ajungi din nou la ele.
+   Rândurile au înălțimi fixe, deci poziția fiecăruia se știe fără să-l desenăm. */
+const vlStates = new Map(); let vlSeq = 0, vlCur = null;
+function vlBlocks(st) {
+  const BH = Math.max(500, window.innerHeight); st.blocks = []; let top = 0, b = null;
+  st.rows.forEach((r, i) => {
+    if (!b || b.h >= BH) { b = { start: i, end: i, top, h: 0 }; st.blocks.push(b); }
+    b.end = i + 1; b.h += r.h; top += r.h;
+  });
+  st.total = top;
+}
+function vlist(rows, opt = {}) { // rows: [{ h, html() }]
+  const id = 'v' + (++vlSeq), st = { id, rows, ver: 0, el: null, kind: opt.kind || '', onRange: opt.onRange || null };
+  vlBlocks(st);
+  vlStates.set(id, st); if (vlStates.size > 6) vlStates.delete(vlStates.keys().next().value);
+  return `<div class="vl" data-vl="${id}" style="height:${st.total}px">${st.blocks.slice(0, 2).map((b, i) => vlBlockHtml(st, i)).join('')}</div>`;
+}
+const vlSig = (st, i) => { const b = st.blocks[i]; return `${b.start}:${b.end}:${b.top}:${st.ver}`; };
+function vlBlockHtml(st, i) {
+  const b = st.blocks[i]; let h = '';
+  for (let k = b.start; k < b.end; k++) h += st.rows[k].html();
+  return `<div class="vb" data-b="${i}" data-sig="${vlSig(st, i)}" style="top:${b.top}px">${h}</div>`;
+}
+function vlMount(root) {
+  vlCur = null; const el = root && root.querySelector('.vl'); if (!el) return;
+  const st = vlStates.get(el.dataset.vl); if (!st) return;
+  st.el = el; vlCur = st; vlUpdate();
+}
+function vlSetRows(st, rows) { st.rows = rows; vlBlocks(st); if (st.el) st.el.style.height = st.total + 'px'; vlUpdate(); }
+function vlUpdate() {
+  const st = vlCur; if (!st || !st.el || !st.el.isConnected || !st.blocks.length) return;
+  const top0 = st.el.getBoundingClientRect().top + window.scrollY, mid = window.scrollY - top0 + window.innerHeight / 2;
+  let lo = 0, hi = st.blocks.length - 1; // căutare binară a blocului din mijlocul ecranului
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (st.blocks[m].top <= mid) lo = m; else hi = m - 1; }
+  const want = new Set([lo - 1, lo, lo + 1].filter((i) => i >= 0 && i < st.blocks.length));
+  for (const n of [...st.el.children]) { const i = +n.dataset.b; if (!want.has(i) || n.dataset.sig !== vlSig(st, i)) n.remove(); }
+  const have = new Set([...st.el.children].map((n) => +n.dataset.b));
+  for (const i of want) if (!have.has(i)) st.el.insertAdjacentHTML('beforeend', vlBlockHtml(st, i));
+  if (st.onRange) st.onRange(st.blocks[Math.min(...want)].start, st.blocks[Math.max(...want)].end);
+}
+function vlRedraw() { if (vlCur) { vlCur.ver++; vlUpdate(); } } // redesenează blocurile vizibile (ex. după reîncărcarea unei pagini)
+let vlRaf = 0;
+window.addEventListener('scroll', () => { if (!vlRaf) vlRaf = requestAnimationFrame(() => { vlRaf = 0; vlUpdate(); }); }, { passive: true });
+let vlRz = 0; window.addEventListener('resize', () => { clearTimeout(vlRz); vlRz = setTimeout(() => { if (vlCur) renderList(); }, 150); });
+const CARD_H = 112, GROUP_H = 44;
+const cardRows = (list, card, groupOf) => {
+  const rows = []; let lastG = null;
+  for (const it of list) {
+    if (groupOf) { const g = groupOf(it); if (g !== lastG) { const lbl = g; rows.push({ h: GROUP_H, html: () => `<div class="group">${esc(lbl)}</div>` }); lastG = g; } }
+    rows.push({ h: CARD_H, html: () => card(it) });
+  }
+  return rows;
+};
+
 /* ---------- carduri ---------- */
 function movieCard(it, inFav) {
   const sub = [inFav ? 'Film' : '', it.year, it.status === 'watched' && it.watchedOn ? 'văzut ' + fmtDate(it.watchedOn) : (inFav ? 'de văzut' : '')].filter(Boolean).join(' · ');
@@ -579,7 +649,7 @@ function tvCard(it, inFav) {
     ? `<button class="pill go" data-act="nextEp" data-key="${esc(it.key)}">✓ S${nx.s}E${nx.e}</button>`
     : (it.status === 'completed' ? scoreBox(it.rating) : '');
   return `<div class="card" data-act="open" data-key="${esc(it.key)}">${poster(it.poster, it.title)}
-    <div class="meta"><div class="t">${it.fav && inFav !== true ? '<span class="fh">♥</span>' : ''}${esc(it.title)}</div><div class="sub">${esc(sub)}</div>
+    <div class="meta"><div class="t${p.t && it.status !== 'watchlist' ? ' t1' : ''}">${it.fav && inFav !== true ? '<span class="fh">♥</span>' : ''}${esc(it.title)}</div><div class="sub">${esc(sub)}</div>
     ${p.t && it.status !== 'watchlist' ? `<div class="bar"><i style="width:${pct}%"></i></div><div class="small" style="margin-top:4px">${p.w}/${p.t} episoade</div>` : ''}</div>${right}</div>`;
 }
 const wrapList = (h) => `<div class="wrap" style="padding-top:0">${h}</div>`;
@@ -613,7 +683,7 @@ function allList() {
   const h = backupBanner();
   if (!list.length) return h + (ui.filter ? `<div class="empty">Niciun rezultat.</div>` :
     `<div class="empty"><b>Nimic aici încă</b>Caută un film sau un serial și adaugă-l.<br><br><button class="btn pri" data-act="tab" data-tab="search">Caută</button></div>`);
-  return wrapList(h + list.map((it) => (it.type === 'movie' ? movieCard(it, 'type') : tvCard(it, 'type'))).join(''));
+  return wrapList(h + vlist(cardRows(list, (it) => (it.type === 'movie' ? movieCard(it, 'type') : tvCard(it, 'type')))));
 }
 function movieList() {
   const list = items().filter((i) => i.type === 'movie' && i.status === ui.mSeg && matches(i));
@@ -621,15 +691,9 @@ function movieList() {
   let h = backupBanner();
   if (!list.length) return h + (ui.filter ? `<div class="empty">Niciun rezultat.</div>` :
     `<div class="empty"><b>${ui.mSeg === 'watched' ? 'Niciun film văzut încă' : 'Lista e goală'}</b>Caută un film și adaugă-l.<br><br><button class="btn pri" data-act="tab" data-tab="search">Caută filme</button></div>`);
-  let lastG = null;
-  for (const it of list) {
-    if (ui.mSeg === 'watched' && ui.sort === 'date') {
-      const g = it.watchedOn ? it.watchedOn.slice(0, 7) : 'x';
-      if (g !== lastG) { h += `<div class="group">${g === 'x' ? 'Fără dată' : cap(fmtDate(g + '-15', { month: 'long', year: 'numeric' }))}</div>`; lastG = g; }
-    }
-    h += movieCard(it);
-  }
-  return wrapList(h);
+  const groupOf = ui.mSeg === 'watched' && ui.sort === 'date'
+    ? (it) => (it.watchedOn ? cap(fmtDate(it.watchedOn.slice(0, 7) + '-15', { month: 'long', year: 'numeric' })) : 'Fără dată') : null;
+  return wrapList(h + vlist(cardRows(list, (it) => movieCard(it), groupOf)));
 }
 function tvList() {
   const list = items().filter((i) => i.type === 'tv' && i.status === ui.tSeg && matches(i));
@@ -637,7 +701,7 @@ function tvList() {
   const h = backupBanner();
   if (!list.length) return h + (ui.filter ? `<div class="empty">Niciun rezultat.</div>` :
     `<div class="empty"><b>Nimic aici încă</b>Caută un serial și începe să bifezi episoadele.<br><br><button class="btn pri" data-act="tab" data-tab="search">Caută seriale</button></div>`);
-  return wrapList(h + list.map((it) => tvCard(it)).join(''));
+  return wrapList(h + vlist(cardRows(list, (it) => tvCard(it))));
 }
 
 /* ---------- ecran: Preferate (filme + seriale) ---------- */
@@ -654,7 +718,7 @@ V.fav = {
     list.sort(ui.sort === 'date' ? (a, b) => (b.favAt || b.updatedAt) - (a.favAt || a.updatedAt) : sorter());
     if (!list.length) return ui.filter ? `<div class="empty">Niciun rezultat.</div>`
       : `<div class="empty"><b>Niciun preferat încă</b>Deschide un film sau un serial din listele tale și apasă ♥ din colțul din dreapta sus.</div>`;
-    return wrapList(list.map((it) => (it.type === 'movie' ? movieCard(it, true) : tvCard(it, true))).join(''));
+    return wrapList(vlist(cardRows(list, (it) => (it.type === 'movie' ? movieCard(it, true) : tvCard(it, true)))));
   }
 };
 
@@ -711,7 +775,7 @@ V.search = {
     const res = ui.sRes || [];
     if (!res.length && ui.sRes) return `<div class="wrap"><div class="empty">${ui.sq.trim() ? `Niciun rezultat pentru „${esc(ui.sq)}”${fActive() ? ' cu filtrele alese' : ''}.` : 'Niciun titlu pentru filtrele alese.'}
       ${fActive() ? '<br><br><button class="btn" data-act="fReset">Resetează filtrele</button>' : ''}</div>${manual}</div>`;
-    return `<div class="wrap">${resTitle()}<div class="grid">${res.map(tileHtml).join('')}</div>${moreHtml()}${manual}</div>`;
+    return `<div class="wrap">${resTitle()}${vlist(gridRows(), { kind: 'search', onRange: searchRange })}${moreHtml()}${manual}</div>`;
   }
 };
 function resTitle() {
@@ -725,7 +789,41 @@ function resTitle() {
   if (g && ui.sType !== 'tv' && g.m == null) note = ` <span class="small" style="text-transform:none;letter-spacing:0">(doar seriale)</span>`;
   return `<div class="group">${parts.map(esc).join(' · ')}${note}</div>`;
 }
+function gridRows() { // rânduri de câte 3 postere, cu înălțime calculată din lățimea ecranului
+  const res = ui.sRes || [], cw = Math.min(window.innerWidth, 1000) - 32, tw = (cw - 20) / 3;
+  const rowH = Math.round(tw * 1.5 + 5 + 31 + 17 + 14), rows = [];
+  for (let i = 0; i < res.length; i += 3) {
+    const a = i;
+    rows.push({ h: rowH, html: () => `<div class="grow" style="height:${rowH}px">${(ui.sRes || []).slice(a, a + 3).map(tileHtml).join('')}</div>` });
+  }
+  return rows;
+}
+// paginile de rezultate departe de ecran (în afara celor ~3 ecrane desenate) se șterg din memorie
+// și rămân doar ca „ciot” (id + tip); când ajungi iar la ele, pagina se cere din nou de la TMDB
+function searchRange(rowA, rowB) {
+  if (!ui.sRes || !ui.sMeta) return;
+  const a = rowA * 3, b = rowB * 3;
+  for (const m of ui.sMeta) {
+    const near = m.e > a - 6 && m.s < b + 6;
+    if (!near && !m.ev) {
+      for (let k = m.s; k < m.e; k++) { const r = ui.sRes[k]; if (r && !r._stub) { searchPreview.delete(`${r.media_type}:${r.id}`); ui.sRes[k] = { id: r.id, media_type: r.media_type, _stub: true }; } }
+      m.ev = true;
+    } else if (near && m.ev && !m.loading) reloadPage(m);
+  }
+}
+async function reloadPage(m) {
+  m.loading = true; const seq = sSeq;
+  try {
+    const list = await fetchSearch(m.p, true);
+    if (seq !== sSeq) return;
+    const map = new Map(list.res.map((r) => [`${r.media_type}:${r.id}`, r]));
+    for (let k = m.s; k < m.e; k++) { const r = ui.sRes[k], f = r && map.get(`${r.media_type}:${r.id}`); if (f) { ui.sRes[k] = f; searchPreview.set(`${f.media_type}:${f.id}`, f); } }
+    m.ev = false;
+    if (ui.tab === 'search') vlRedraw();
+  } catch (e) {} finally { m.loading = false; }
+}
 function tileHtml(r) {
+  if (!r || r._stub) return `<div class="tile skel"><div class="poster ph"></div><div class="tt"></div><div class="ty"></div></div>`;
   const type = r.media_type, key = `${type}:${r.id}`, it = db.items[key];
   const t = r.title || r.name, y = (r.release_date || r.first_air_date || '').slice(0, 4);
   const tag = it ? `<span class="tag in">${esc((type === 'movie' ? MOVIE_ST : TV_ST)[it.status])}</span>` : (ui.sType === 'all' ? `<span class="tag">${type === 'movie' ? 'Film' : 'Serial'}</span>` : '');
@@ -770,7 +868,7 @@ function passClient(r, isQuery) { // filtre aplicate pe telefon (la căutarea du
   if (f.top7 && !(r.vote_average >= 7)) return false;
   return true;
 }
-async function fetchSearch(page) {
+async function fetchSearch(page, raw = false) { // raw: fără filtrele locale (pentru reîncărcarea unei pagini)
   const q = ui.sq.trim(), t = ui.sType;
   let res = [], total = 1;
   if (!q) {
@@ -788,8 +886,8 @@ async function fetchSearch(page) {
     res = (j.results || []).map((r) => ({ ...r, media_type: r.media_type || t }));
     total = j.total_pages || 1;
   }
-  res = res.filter((r) => (r.media_type === 'movie' || r.media_type === 'tv') && passClient(r, !!q));
-  res.forEach((r) => searchPreview.set(`${r.media_type}:${r.id}`, r));
+  res = res.filter((r) => (r.media_type === 'movie' || r.media_type === 'tv') && (raw || passClient(r, !!q)));
+  if (!raw) res.forEach((r) => searchPreview.set(`${r.media_type}:${r.id}`, r));
   return { res, total: Math.min(total, 500) };
 }
 let sTimer, sSeq = 0;
@@ -803,7 +901,7 @@ function runSearch(delay = 350) {
       let page = 1, { res, total } = await fetchSearch(1);
       while (!res.length && page < total && page < 4) { page++; ({ res, total } = await fetchSearch(page)); } // filtrele pot goli o pagină
       if (seq !== sSeq) return;
-      ui.sRes = res; ui.sPage = page; ui.sTotal = total;
+      ui.sRes = res; ui.sPage = page; ui.sTotal = total; ui.sMeta = [{ p: page, s: 0, e: res.length }];
     } catch (e) { if (seq !== sSeq) return; ui.sErr = errMsg(e); ui.sRes = null; }
     ui.sLoading = false;
     if (ui.tab === 'search') { renderList(); window.scrollTo(0, 0); }
@@ -874,10 +972,12 @@ async function loadMore() {
   try {
     const { res, total } = await fetchSearch(ui.sPage + 1);
     if (seq !== sSeq) return;
-    const have = new Set(ui.sRes.map((r) => `${r.media_type}:${r.id}`));
+    const have = new Set(ui.sRes.map((r) => `${r.media_type}:${r.id}`)); // merge și cu „cioturile”
     const fresh = res.filter((r) => !have.has(`${r.media_type}:${r.id}`));
+    const start = ui.sRes.length;
     ui.sRes.push(...fresh); ui.sPage++; ui.sTotal = total;
-    const grid = $('#list .grid'); if (grid) grid.insertAdjacentHTML('beforeend', fresh.map(tileHtml).join(''));
+    (ui.sMeta = ui.sMeta || []).push({ p: ui.sPage, s: start, e: ui.sRes.length });
+    if (vlCur && vlCur.kind === 'search') vlSetRows(vlCur, gridRows()); // doar se prelungește lista; blocurile vizibile rămân
   } catch (e) { if (seq === sSeq) ui.sMoreErr = true; }
   if (seq !== sSeq) return;
   ui.sMore = false; updateMore();
@@ -1064,53 +1164,71 @@ window.addEventListener('resize', () => { indReady = false; placeInd(); });
 
 /* ---------- gesturi pe pagină ----------
    • vertical: efect elastic la capete (sus peste tot; jos peste tot, mai puțin la Caută cât se mai încarcă rezultate)
-   • orizontal: glisezi între ecranele principale; la primul / ultimul ecran pagina se întinde elastic */
+   • orizontal: glisezi între ecranele principale; ecranele vecine sunt pregătite dinainte, în fundal,
+     ca glisarea să pornească instant. La primul / ultimul ecran pagina se întinde elastic. */
 (() => {
-  const view = $('#view');
+  const view = $('#view'), root = document.documentElement;
   const H = () => window.innerHeight, W = () => window.innerWidth;
   const rub = (d) => Math.sign(d) * (1 - 1 / (Math.abs(d) * 0.55 / H() + 1)) * H() * 0.6;
   const hrub = (d) => Math.sign(d) * (1 - 1 / (Math.abs(d) * 0.55 / W() + 1)) * W() * 0.5;
   const atTop = () => window.scrollY <= 0;
   const atBottom = () => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
   const bottomOk = () => !(ui.tab === 'search' && ui.sRes && ui.sPage < ui.sTotal);
-  const blocked = (t) => document.documentElement.classList.contains('lock') || document.documentElement.classList.contains('plock')
+  const blocked = (t) => root.classList.contains('lock') || root.classList.contains('plock')
     || !$('#egg').classList.contains('hide') || (t && t.closest && t.closest('#tabs,#sheet,#picker,#egg'));
   const noSwipe = (t) => t && t.closest && t.closest('.fbar,.seg,.kind,input,textarea,select'); // acolo glisarea orizontală are alt rol
   const TABS = () => tabBtns().map((b) => b.dataset.tab);
+  const EASE = 'cubic-bezier(.25,.8,.25,1)';
+
+  // --- ecranele vecine, randate dinainte (stânga = ecranul anterior, dreapta = următorul) ---
+  const mkLayer = () => { const d = document.createElement('div'); d.className = 'peek'; d.setAttribute('aria-hidden', 'true'); document.body.appendChild(d); return d; };
+  const layers = { L: mkLayer(), R: mkLayer() }, built = { L: '', R: '' };
+  let stamp = 0, pt = 0;
+  const neighbor = (side) => { const tabs = TABS(), i = tabs.indexOf(ui.tab); return tabs[side === 'L' ? i - 1 : i + 1]; };
+  function buildLayer(side) {
+    const tab = neighbor(side), el = layers[side];
+    if (!tab) { el.innerHTML = ''; built[side] = ''; return; }
+    const key = tab + '|' + stamp; if (built[side] === key) return;
+    el.innerHTML = (V[tab].head() + `<div>${V[tab].list()}</div>`).replace(/\sid="/g, ' data-pid="'); // fără id-uri duplicate
+    el.querySelectorAll('.vb').forEach((b) => { if (+b.dataset.b > 0) b.remove(); }); // se vede doar primul ecran
+    built[side] = key;
+  }
+  window.__peekStale = () => { // apelat după fiecare randare: refacem straturile când telefonul e liber
+    stamp++; clearTimeout(pt);
+    pt = setTimeout(() => (window.requestIdleCallback || ((f) => f()))(() => { if (!o || o.mode !== 'h') { buildLayer('L'); buildLayer('R'); } }), 300);
+  };
+
+  // --- desenare sincronizată cu ecranul (un singur update pe cadru) ---
+  let raf = 0, pend = null;
+  const paint = () => { raf = 0; if (!pend) return; view.style.transform = pend.v; if (pend.l) pend.l.style.transform = pend.p; pend = null; };
+  const setT = (v, l, p) => { pend = { v, l, p }; if (!raf) raf = requestAnimationFrame(paint); };
+  const flush = () => { if (raf) cancelAnimationFrame(raf); raf = 0; pend = null; };
+
   let o = null, busy = false;
   const release = () => {
-    view.style.transition = 'transform .5s cubic-bezier(.2,.9,.25,1)'; view.style.transform = '';
+    flush(); view.style.transition = `transform .5s ${EASE}`; view.style.transform = '';
     setTimeout(() => { if (!o || !o.mode) view.style.transition = ''; }, 520);
   };
-  function indTo(i, j, p) { // bula din bara de jos urmează glisarea
-    const bs = tabBtns(); if (!bs[i] || !bs[j]) return;
-    tabInd.style.transition = 'none';
-    tabInd.style.left = (bs[i].offsetLeft + (bs[j].offsetLeft - bs[i].offsetLeft) * p) + 'px';
+  function showLayer(side) {
+    for (const k of ['L', 'R']) layers[k].classList.toggle('on', k === side);
+    if (side) { buildLayer(side); layers[side].style.transition = 'none'; }
   }
-  // ecranul vecin e randat dinainte într-un strat separat și intră odată cu degetul
-  const peek = document.createElement('div'); peek.id = 'peek'; peek.setAttribute('aria-hidden', 'true'); document.body.appendChild(peek);
-  function buildPeek(tab) {
-    const v = V[tab];
-    peek.innerHTML = (v.head() + `<div>${v.list()}</div>`).replace(/\sid="/g, ' data-pid="'); // fără id-uri duplicate
-    peek.style.transition = 'none'; peek.classList.add('on');
-  }
-  function hidePeek() { peek.classList.remove('on'); peek.innerHTML = ''; peek.style.transition = ''; peek.style.transform = ''; }
-  function switchTo(tab, dir, ms) {
-    busy = true;
-    const tr = `transform ${ms}ms cubic-bezier(.2,.85,.3,1)`;
-    view.style.transition = tr; peek.style.transition = tr;
-    view.style.transform = `translateX(${dir * W()}px)`; peek.style.transform = 'translateX(0px)';
-    tabInd.style.transition = '';
+  function endSwipe() { showLayer(null); root.classList.remove('swiping'); view.style.willChange = ''; }
+  function switchTo(tab, dir, side, ms) {
+    busy = true; flush();
+    const tr = `transform ${ms}ms ${EASE}`, l = layers[side];
+    view.style.transition = tr; l.style.transition = tr;
+    view.style.transform = `translate3d(${dir * W()}px,0,0)`; l.style.transform = 'translate3d(0,0,0)';
     setTimeout(() => {
-      A.tab({ tab }); // conținutul real e identic cu cel din previzualizare, deci schimbarea nu se vede
+      A.tab({ tab }); // conținutul real e identic cu stratul pregătit, deci schimbarea nu se vede; bula din bară se mută acum
       view.style.transition = 'none'; view.style.transform = '';
-      hidePeek(); void view.offsetWidth; view.style.transition = ''; busy = false;
-    }, ms + 10);
+      endSwipe(); void view.offsetWidth; view.style.transition = ''; busy = false;
+    }, ms + 16);
   }
   document.addEventListener('touchstart', (e) => {
     if (busy || e.touches.length !== 1 || blocked(e.target)) { o = null; return; }
     const t = e.touches[0], now = performance.now();
-    o = { x: t.clientX, y: t.clientY, ly: t.clientY, lx: t.clientX, mode: null, anchor: 0, pj: null, hOk: !noSwipe(e.target), pts: [{ t: now, x: t.clientX }] };
+    o = { x: t.clientX, y: t.clientY, ly: t.clientY, lx: t.clientX, mode: null, axis: null, side: null, anchor: 0, hOk: !noSwipe(e.target), pts: [{ t: now, x: t.clientX }] };
   }, { passive: true });
   document.addEventListener('touchmove', (e) => {
     if (!o || o.mode === 'none') return;
@@ -1118,43 +1236,49 @@ window.addEventListener('resize', () => { indReady = false; placeInd(); });
     o.pts.push({ t: performance.now(), x: t.clientX }); if (o.pts.length > 8) o.pts.shift();
     const dx = t.clientX - o.x, dy = t.clientY - o.y;
     if (!o.mode) {
-      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) { o.mode = o.hOk ? 'h' : 'none'; if (o.mode === 'none') return; }
-      else if (step > 0 && atTop()) { o.mode = 'v'; o.dir = 1; o.anchor = t.clientY - step; }
-      else if (step < 0 && atBottom() && bottomOk()) { o.mode = 'v'; o.dir = -1; o.anchor = t.clientY - step; }
-      else { if (Math.abs(dy) > 12) o.mode = 'none'; return; } // derulare normală
+      if (!o.axis) { // direcția se decide din prima mișcare, înainte ca pagina să înceapă să deruleze
+        if (Math.abs(dx) + Math.abs(dy) < 3) return;
+        o.axis = Math.abs(dx) > Math.abs(dy) * 1.1 ? 'x' : 'y';
+      }
+      if (o.axis === 'x') {
+        if (!o.hOk || !e.cancelable) { o.mode = 'none'; return; }
+        o.mode = 'h'; root.classList.add('swiping'); view.style.willChange = 'transform'; view.style.transition = 'none';
+      } else {
+        if (!e.cancelable) return;
+        if (step > 0 && atTop()) { o.mode = 'v'; o.dir = 1; o.anchor = t.clientY - step; }
+        else if (step < 0 && atBottom() && bottomOk()) { o.mode = 'v'; o.dir = -1; o.anchor = t.clientY - step; }
+        else return; // derulare normală
+      }
     }
     e.preventDefault();
     if (o.mode === 'h') {
-      const tabs = TABS(), i = tabs.indexOf(ui.tab), j = dx < 0 ? i + 1 : i - 1;
-      const edge = j < 0 || j >= tabs.length;
-      if (!edge && o.pj !== j) { buildPeek(tabs[j]); o.pj = j; }
-      if (edge && o.pj != null) { hidePeek(); o.pj = null; }
-      view.style.transition = 'none'; view.style.transform = `translateX(${(edge ? hrub(dx) : dx).toFixed(1)}px)`;
-      if (!edge) { peek.style.transform = `translateX(${(dx + (dx < 0 ? W() : -W())).toFixed(1)}px)`; indTo(i, j, Math.min(1, Math.abs(dx) / W())); }
-      return;
+      const side = dx < 0 ? 'R' : 'L', has = !!neighbor(side);
+      if (side !== o.side) { o.side = side; showLayer(has ? side : null); }
+      if (!has) return setT(`translate3d(${hrub(dx).toFixed(1)}px,0,0)`); // margine: elastic
+      return setT(`translate3d(${dx.toFixed(1)}px,0,0)`, layers[side], `translate3d(${(dx + (dx < 0 ? W() : -W())).toFixed(1)}px,0,0)`);
     }
     const d = t.clientY - o.anchor;
-    if (d * o.dir <= 0) { o.mode = null; view.style.transition = ''; view.style.transform = ''; return; } // s-a întors: derulare normală
-    view.style.transition = 'none'; view.style.transform = `translateY(${rub(d).toFixed(1)}px)`;
+    if (d * o.dir <= 0) { o.mode = null; flush(); view.style.transition = ''; view.style.transform = ''; return; } // s-a întors: derulare normală
+    view.style.transition = 'none'; setT(`translateY(${rub(d).toFixed(1)}px)`);
   }, { passive: false });
   const end = () => {
     if (!o) return; const g = o; o = null;
     if (g.mode === 'v') return release();
     if (g.mode !== 'h') return;
+    flush();
     const dx = g.lx - g.x, last = g.pts[g.pts.length - 1], rec = g.pts.filter((p) => last.t - p.t <= 100);
     const v = rec.length > 1 ? (last.x - rec[0].x) / Math.max(1, last.t - rec[0].t) : 0;
-    const tabs = TABS(), i = tabs.indexOf(ui.tab), j = dx < 0 ? i + 1 : i - 1;
-    const go = j >= 0 && j < tabs.length && (Math.abs(dx) > W() * 0.3 || (Math.abs(dx) > 40 && Math.abs(v) > 0.35 && Math.sign(v) === Math.sign(dx)));
+    const side = dx < 0 ? 'R' : 'L', tab = neighbor(side);
+    const go = !!tab && (Math.abs(dx) > W() * 0.28 || (Math.abs(dx) > 30 && Math.abs(v) > 0.3 && Math.sign(v) === Math.sign(dx)));
     if (go) { // durata depinde de cât mai e de parcurs și de viteza degetului
-      const left = W() - Math.abs(dx), ms = Math.round(Math.max(180, Math.min(380, Math.abs(v) > 0.3 ? left / Math.abs(v) * 1.4 : left * 1.1)));
-      return switchTo(tabs[j], dx < 0 ? -1 : 1, ms);
+      const left = W() - Math.abs(dx), ms = Math.round(Math.max(200, Math.min(360, Math.abs(v) > 0.3 ? left / Math.abs(v) * 1.6 : left * 1.0)));
+      return switchTo(tab, dx < 0 ? -1 : 1, side, ms);
     }
-    const hasPeek = g.pj != null;
-    const tr = hasPeek ? 'transform .36s cubic-bezier(.2,.85,.3,1)' : 'transform .45s cubic-bezier(.2,.9,.3,1.12)';
+    const tr = `transform .34s ${EASE}`;
     view.style.transition = tr; view.style.transform = '';
-    if (hasPeek) { peek.style.transition = tr; peek.style.transform = `translateX(${dx < 0 ? W() : -W()}px)`; setTimeout(hidePeek, 380); }
-    tabInd.style.transition = ''; placeInd();
-    setTimeout(() => { view.style.transition = ''; }, 460);
+    if (tab) { const l = layers[side]; l.style.transition = tr; l.style.transform = `translate3d(${dx < 0 ? W() : -W()}px,0,0)`; }
+    busy = true;
+    setTimeout(() => { endSwipe(); view.style.transition = ''; busy = false; }, 360);
   };
   document.addEventListener('touchend', end); document.addEventListener('touchcancel', end);
   // când o derulare cu inerție lovește capătul, pagina „sare” puțin
@@ -1176,11 +1300,13 @@ window.addEventListener('resize', () => { indReady = false; placeInd(); });
 function renderView() {
   const v = V[ui.tab];
   $('#view').innerHTML = v.head() + `<div id="list">${v.list()}</div>`;
+  vlMount($('#list'));
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === ui.tab));
   placeInd();
+  if (window.__peekStale) window.__peekStale();
   if (ui.tab === 'search') observeMore();
 }
-function renderList() { const l = $('#list'); if (l) l.innerHTML = V[ui.tab].list(); if (ui.tab === 'search') observeMore(); }
+function renderList() { const l = $('#list'); if (l) { l.innerHTML = V[ui.tab].list(); vlMount(l); } if (ui.tab === 'search') observeMore(); if (window.__peekStale) window.__peekStale(); }
 function renderHeadCounts() { // actualizează contoarele fără să pierdem focusul
   if (ui.tab !== 'saved' && ui.tab !== 'fav') return;
   const tmp = document.createElement('div'); tmp.innerHTML = V[ui.tab].head();
