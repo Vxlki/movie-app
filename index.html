@@ -426,7 +426,7 @@ html.glass .egg.show{background:rgba(10,8,16,.4)}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '3.8';
+const APP_VERSION = '3.9';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
@@ -701,7 +701,7 @@ const cardRows = (list, card, groupOf) => {
 
 /* ---------- carduri ---------- */
 function movieCard(it, inFav) {
-  const sub = [inFav ? 'Film' : '', it.year, it.status === 'watched' && it.watchedOn ? 'văzut ' + fmtDate(it.watchedOn) : (inFav ? 'de văzut' : '')].filter(Boolean).join(' · ');
+  const sub = [inFav ? 'Film' : '', it.year, it.status === 'watched' ? '' : (inFav ? 'de văzut' : '')].filter(Boolean).join(' · ');
   return `<div class="card" data-act="open" data-key="${esc(it.key)}">${poster(it.poster, it.title)}
     <div class="meta"><div class="t">${it.fav && inFav !== true ? '<span class="fh">♥</span>' : ''}${esc(it.title)}</div><div class="sub">${esc(sub)}</div>${it.note ? `<div class="note">${esc(it.note)}</div>` : ''}</div>
     ${it.status === 'watched' ? scoreBox(it.rating) : `<button class="pill go" data-act="quickWatched" data-key="${esc(it.key)}">✓ Văzut</button>`}</div>`;
@@ -760,9 +760,7 @@ function movieList() {
   let h = backupBanner();
   if (!list.length) return h + (ui.filter ? `<div class="empty">Niciun rezultat.</div>` :
     `<div class="empty"><b>${ui.mSeg === 'watched' ? 'Niciun film văzut încă' : 'Lista e goală'}</b>Caută un film și adaugă-l.<br><br><button class="btn pri" data-act="tab" data-tab="search">Caută filme</button></div>`);
-  const groupOf = ui.mSeg === 'watched' && ui.sort === 'date'
-    ? (it) => (it.watchedOn ? cap(fmtDate(it.watchedOn.slice(0, 7) + '-15', { month: 'long', year: 'numeric' })) : 'Fără dată') : null;
-  return wrapList(h + vlist(cardRows(list, (it) => movieCard(it), groupOf)));
+  return wrapList(h + vlist(cardRows(list, (it) => movieCard(it))));
 }
 function tvList() {
   const list = items().filter((i) => i.type === 'tv' && i.status === ui.tSeg && matches(i));
@@ -1144,18 +1142,12 @@ V.stats = {
     const mv = all.filter((i) => i.type === 'movie' && i.status === 'watched');
     const tv = all.filter((i) => i.type === 'tv');
     const y = String(new Date().getFullYear());
-    const epDates = []; let epMin = 0, eps = 0;
-    for (const s of tv) for (const sn in s.eps || {}) for (const e in s.eps[sn]) { eps++; epDates.push(s.eps[sn][e]); epMin += s.epRuntime || 0; }
+    let epMin = 0, eps = 0;
+    for (const s of tv) for (const sn in s.eps || {}) for (const e in s.eps[sn]) { eps++; epMin += s.epRuntime || 0; }
     const mvMin = mv.reduce((a, m) => a + (m.runtime || 0), 0);
     const hours = Math.round((mvMin + epMin) / 60);
     const rated = all.filter((i) => i.rating);
     const avg = rated.length ? (rated.reduce((a, i) => a + i.rating, 0) / rated.length).toFixed(1) : '–';
-    const months = []; const d = new Date(); d.setDate(15);
-    for (let i = 11; i >= 0; i--) { const x = new Date(d.getFullYear(), d.getMonth() - i, 15); months.push(`${x.getFullYear()}-${pad(x.getMonth() + 1)}`); }
-    const mCount = months.map((m) => mv.filter((i) => (i.watchedOn || '').startsWith(m)).length);
-    const eCount = months.map((m) => epDates.filter((x) => (x || '').startsWith(m)).length);
-    const mLbl = months.map((m) => fmtDate(m + '-15', { month: 'short' }).replace('.', '').slice(0, 3));
-    const cols = (arr, cls) => { const mx = Math.max(1, ...arr); return `<div class="cols ${cls}">${arr.map((v, i) => `<div><em>${v || ''}</em><i style="height:${v / mx * 100}%"></i><span>${mLbl[i]}</span></div>`).join('')}</div>`; };
     const dist = Array.from({ length: 10 }, (_, i) => rated.filter((r) => r.rating === i + 1).length);
     const dmx = Math.max(1, ...dist);
     const gc = {};
@@ -1171,8 +1163,6 @@ V.stats = {
         <div class="kpi"><b>${hours}</b><span>ore${mv.some((m) => !m.runtime) ? ' (aprox.)' : ''}</span></div>
         <div class="kpi"><b>${avg}</b><span>nota medie</span></div>
       </div>
-      <div class="chart"><h4>Filme pe lună</h4>${cols(mCount, '')}</div>
-      <div class="chart"><h4>Episoade pe lună</h4>${cols(eCount, 'ep')}</div>
       ${rated.length ? `<div class="chart"><h4>Notele tale</h4><div class="cols rt">${dist.map((v, i) => `<div><em>${v || ''}</em><i style="height:${v / dmx * 100}%"></i><span>${i + 1}</span></div>`).join('')}</div></div>` : ''}
       ${top.length ? `<div class="chart"><h4>Genuri preferate</h4>${top.map(([g, n]) => `<div class="hbar"><span>${esc(g)}</span><div class="bar"><i style="width:${n / gmx * 100}%"></i></div><b>${n}</b></div>`).join('')}</div>` : ''}
       ${secretsHtml()}
@@ -1894,8 +1884,6 @@ function renderSheet() {
   } else {
     const ST = it.type === 'movie' ? MOVIE_ST : TV_ST;
     h += `<div class="sec"><h3>Status</h3><div class="chips">${Object.entries(ST).map(([k, l]) => `<button class="${it.status === k ? 'on' : ''}" data-act="status" data-st="${k}">${l}</button>`).join('')}</div></div>`;
-    if (it.type === 'movie' && it.status === 'watched')
-      h += `<div class="sec"><h3>Data vizionării</h3><input class="field" type="date" value="${esc(it.watchedOn || '')}" max="${today()}" data-in="date"></div>`;
     if (it.type === 'tv' || it.status === 'watched') {
       h += `<div class="sec"><h3>Nota ta</h3><div class="rate">${Array.from({ length: 10 }, (_, i) => i + 1).map((n) =>
         `<button class="${it.rating === n ? 'on' : (it.rating && n < it.rating ? 'fill' : '')}" data-act="rate" data-v="${n}">${n}</button>`).join('')}</div></div>`;
@@ -1923,7 +1911,7 @@ function renderSheet() {
         const list = Array.isArray(sd) && sd.length ? sd : Array.from({ length: s.count }, (_, i) => ({ episode_number: i + 1 }));
         if (sd !== 'loading') for (const e of list) {
           const n = e.episode_number, aired = n <= sp.a, on = isW(it, s.n, n);
-          const when = on ? 'văzut ' + fmtDate(it.eps[s.n][n]) : (e.air_date ? fmtDate(e.air_date) : '');
+          const when = e.air_date ? fmtDate(e.air_date) : ''; // data apariției episodului (nu și când l-ai văzut)
           h += `<div class="ep ${aired ? '' : 'future'}" ${aired ? `data-act="ep" data-s="${s.n}" data-e="${n}"` : ''}>
             <span class="n">E${n}</span><div class="meta"><div class="t">${esc(e.name || 'Episodul ' + n)}</div>${when ? `<div class="small">${aired ? '' : 'apare '}${esc(when)}</div>` : ''}</div>
             ${aired ? `<span class="chk ${on ? 'on' : ''}">✓</span>` : ''}</div>`;
@@ -2437,7 +2425,7 @@ function nfRow(g, i) {
   const exists = c && db.items[`${g.kind}:${c.id}`];
   let sub;
   if (g.busy) sub = 'Se caută…';
-  else if (g.kind === 'movie') sub = `Film${g.date ? ' · văzut ' + fmtDate(g.date) : ''}${g.dates.length > 1 ? ` · ${g.dates.length} vizionări` : ''}`;
+  else if (g.kind === 'movie') sub = `Film${g.dates.length > 1 ? ` · ${g.dates.length} vizionări` : ''}`;
   else sub = `Serial · ${g.resolved.length} ${g.resolved.length === 1 ? 'episod' : 'episoade'}${g.unresolved ? ` · ${g.unresolved} nepotrivite` : ''}${g.shifted ? ' · verifică sezoanele' : ''}`;
   return `<div class="imp ${g.include ? '' : 'off'}">
     <button class="chk ${g.include ? 'on' : ''}" data-act="impToggle" data-i="${i}" ${c ? '' : 'disabled'}>✓</button>
