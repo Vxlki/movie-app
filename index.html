@@ -251,6 +251,24 @@ input[type=date].field{width:100%;-webkit-appearance:none;min-height:44px}
 .vb .card{height:104px;margin:0 0 8px;overflow:hidden}
 .vb .group{height:28px;margin:12px 2px 4px;display:flex;align-items:flex-end}
 .vb .t1{-webkit-line-clamp:1}
+.vbtn{flex:0 0 44px;width:44px;padding:0;display:flex;align-items:center;justify-content:center;color:var(--tx);cursor:pointer}
+.vbtn svg{width:20px;height:20px}
+.pwrap{position:relative;border-radius:10px;overflow:hidden}
+.pwrap .poster{display:block}
+.pbar{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(0,0,0,.55)}
+.pbar i{display:block;height:100%;background:var(--ok)}
+.tfav{position:absolute;top:5px;right:6px;z-index:2;color:var(--rose);font-size:15px;text-shadow:0 1px 4px rgba(0,0,0,.7)}
+.tile .tag{z-index:2}
+.grow .tile .ty{display:flex;justify-content:space-between;gap:4px;white-space:nowrap}
+.grow .tile .ty>span:first-child{overflow:hidden;text-overflow:ellipsis}
+/* carduri tip Netflix: poster sus, text dedesubt, pe un card închis la culoare */
+.ntile{background:var(--s1);border-radius:12px;overflow:hidden}
+.ntile .pwrap,.ntile .poster{border-radius:0!important}
+.ntile .tt{margin:8px 8px 0}
+.ntile .ty{padding:3px 8px 8px}
+.ntile .tag{top:7px;left:7px}
+html.glass .ntile{background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.tile.ntile.skel .tt{margin:8px 8px 0;width:70%}
 .grow{display:grid;grid-template-columns:repeat(3,1fr);gap:0 10px;align-items:start;overflow:hidden}
 .grow .tile .tt{height:31px}
 .tile.skel .poster{width:100%;height:auto;aspect-ratio:2/3}
@@ -426,7 +444,7 @@ html.glass .egg.show{background:rgba(10,8,16,.4)}
    Sursa datelor despre filme: TMDB (themoviedb.org)
    ============================================================ */
 
-const APP_VERSION = '3.9';
+const APP_VERSION = '4.0';
 const STORE_KEY = 'filme.v1';
 const TMDB = 'https://api.themoviedb.org/3';
 const IMG = (p, w = 'w185') => p ? `https://image.tmdb.org/t/p/${w}${p}` : '';
@@ -601,7 +619,7 @@ const TV_ST = { watching: 'În curs', watchlist: 'De văzut', completed: 'Termin
 const MOVIE_ST = { watched: 'Văzut', watchlist: 'De văzut' };
 
 /* ---------- UI de bază ---------- */
-const ui = { keyEdit: false, f: null, tab: 'saved', kind: 'all', aSeg: 'watched', fType: 'all', mSeg: 'watched', tSeg: 'watching', filter: '', sort: 'date', sq: '', sType: 'all', sRes: null, sLoading: false, sErr: '', bannerOff: false };
+const ui = { keyEdit: false, f: null, tab: 'search', kind: 'all', aSeg: 'watched', fType: 'all', mSeg: 'watched', tSeg: 'watching', filter: '', sort: 'date', sq: '', sType: 'all', sRes: null, sLoading: false, sErr: '', bannerOff: false };
 const searchPreview = new Map();
 ui.f = Object.assign({}, { sort: 'recent', genre: '', prov: '', provName: '', year: '', top7: false, hideSaved: false }, db.settings.sf || {});
 let toastT;
@@ -690,6 +708,33 @@ let vlRaf = 0;
 window.addEventListener('scroll', () => { if (!vlRaf) vlRaf = requestAnimationFrame(() => { vlRaf = 0; vlUpdate(); }); }, { passive: true });
 let vlRz = 0; window.addEventListener('resize', () => { clearTimeout(vlRz); vlRz = setTimeout(() => { if (vlCur) renderList(); }, 150); });
 const CARD_H = 112, GROUP_H = 44;
+const gridView = () => (db.settings.view || 'grid') === 'grid';
+function tileH() { const cw = Math.min(window.innerWidth, 1000) - 32, tw = (cw - 20) / 3; return Math.round(tw * 1.5 + 67 + 12); } // poster + text + spațiu între rânduri
+function tileRows(list, tile) { // rânduri de câte 3 postere (ca la Caută)
+  const h = tileH(), rows = [{ h: 10, html: () => '<div style="height:10px"></div>' }]; // puțin spațiu sub antet
+  for (let i = 0; i < list.length; i += 3) { const a = i; rows.push({ h, html: () => `<div class="grow" style="height:${h}px">${list.slice(a, a + 3).map(tile).join('')}</div>` }); }
+  return rows;
+}
+// liste: în modul grilă, postere; altfel cardurile pe rânduri
+const listRows = (list, card, tile, groupOf) => (gridView() ? tileRows(list, tile) : cardRows(list, card, groupOf));
+function itemTile(it, mode) { // mode: 'type' = arată și tipul (Toate), true = în Preferate
+  const isTv = it.type === 'tv', p = isTv ? tvProgress(it) : null, nx = isTv ? nextEp(it) : null;
+  let sub = it.year || '';
+  if (isTv && (it.status === 'watching' || it.status === 'dropped') && p.t) sub = nx ? `Urm. S${nx.s} E${nx.e}` : 'La zi';
+  const tag = mode ? `<span class="tag">${isTv ? 'Serial' : 'Film'}</span>` : '';
+  const fav = it.fav && mode !== true ? '<span class="tfav">♥</span>' : '';
+  const pct = isTv && p.t && it.status !== 'watchlist' ? Math.round(p.w / p.t * 100) : -1;
+  const right = it.rating ? `<span class="vote">★ ${it.rating}</span>` : '';
+  return `<div class="tile ntile" data-act="open" data-key="${esc(it.key)}">${tag}${fav}<div class="pwrap">${poster(it.poster, it.title, '', 'w342')}${pct >= 0 ? `<div class="pbar"><i style="width:${pct}%"></i></div>` : ''}</div>
+    <div class="tt">${esc(it.title)}</div><div class="ty"><span>${esc(sub)}</span>${right}</div></div>`;
+}
+function favPersonTile(pp) {
+  return `<div class="tile ptile" data-act="openP" data-id="${pp.id}">${pp.photo ? `<img class="poster" loading="lazy" src="${IMG(pp.photo, 'w185')}" alt="" onerror="this.removeAttribute('src')">` : `<div class="poster ph">${esc(initials(pp.name))}</div>`}
+    <div class="tt">${esc(pp.name)}</div><div class="ty">${esc(deptLabel(pp))}</div></div>`;
+}
+const viewBtn = () => `<button class="field vbtn" data-act="view" aria-label="${gridView() ? 'Arată ca listă' : 'Arată ca postere'}">${gridView()
+  ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>'
+  : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>'}</button>`;
 const cardRows = (list, card, groupOf) => {
   const rows = []; let lastG = null;
   for (const it of list) {
@@ -741,7 +786,7 @@ V.saved = {
     return `<div class="top"><div class="hrow"><h1>Salvate</h1>
         <div class="kind">${[['all', 'Toate'], ['movie', 'Filme'], ['tv', 'Seriale']].map(([v, l]) => `<button class="${k === v ? 'on' : ''}" data-act="kind" data-k="${v}">${l}</button>`).join('')}</div></div>
       <div class="seg">${seg}</div>
-      <div class="tools">${filterInput('Filtrează…')}${sortSelect()}</div></div>`;
+      <div class="tools">${filterInput('Filtrează…')}${sortSelect()}${viewBtn()}</div></div>`;
   },
   list() { return ui.kind === 'movie' ? movieList() : ui.kind === 'tv' ? tvList() : allList(); }
 };
@@ -752,7 +797,7 @@ function allList() {
   const h = backupBanner();
   if (!list.length) return h + (ui.filter ? `<div class="empty">Niciun rezultat.</div>` :
     `<div class="empty"><b>Nimic aici încă</b>Caută un film sau un serial și adaugă-l.<br><br><button class="btn pri" data-act="tab" data-tab="search">Caută</button></div>`);
-  return wrapList(h + vlist(cardRows(list, (it) => (it.type === 'movie' ? movieCard(it, 'type') : tvCard(it, 'type')))));
+  return wrapList(h + vlist(listRows(list, (it) => (it.type === 'movie' ? movieCard(it, 'type') : tvCard(it, 'type')), (it) => itemTile(it, 'type'))));
 }
 function movieList() {
   const list = items().filter((i) => i.type === 'movie' && i.status === ui.mSeg && matches(i));
@@ -760,7 +805,7 @@ function movieList() {
   let h = backupBanner();
   if (!list.length) return h + (ui.filter ? `<div class="empty">Niciun rezultat.</div>` :
     `<div class="empty"><b>${ui.mSeg === 'watched' ? 'Niciun film văzut încă' : 'Lista e goală'}</b>Caută un film și adaugă-l.<br><br><button class="btn pri" data-act="tab" data-tab="search">Caută filme</button></div>`);
-  return wrapList(h + vlist(cardRows(list, (it) => movieCard(it))));
+  return wrapList(h + vlist(listRows(list, (it) => movieCard(it), (it) => itemTile(it))));
 }
 function tvList() {
   const list = items().filter((i) => i.type === 'tv' && i.status === ui.tSeg && matches(i));
@@ -768,7 +813,7 @@ function tvList() {
   const h = backupBanner();
   if (!list.length) return h + (ui.filter ? `<div class="empty">Niciun rezultat.</div>` :
     `<div class="empty"><b>Nimic aici încă</b>Caută un serial și începe să bifezi episoadele.<br><br><button class="btn pri" data-act="tab" data-tab="search">Caută seriale</button></div>`);
-  return wrapList(h + vlist(cardRows(list, (it) => tvCard(it))));
+  return wrapList(h + vlist(listRows(list, (it) => tvCard(it), (it) => itemTile(it))));
 }
 
 /* ---------- ecran: Preferate (filme + seriale) ---------- */
@@ -778,7 +823,7 @@ V.fav = {
     const n = (t) => (t === 'all' ? all.length + np : t === 'person' ? np : all.filter((i) => i.type === t).length);
     return `<div class="top"><h1>Preferate</h1>
       <div class="seg">${[['all', 'Toate'], ['movie', 'Filme'], ['tv', 'Seriale'], ['person', 'Actori']].map(([k, l]) => `<button class="${ui.fType === k ? 'on' : ''}" data-act="fType" data-t="${k}">${l}<span class="n">${n(k)}</span></button>`).join('')}</div>
-      <div class="tools">${filterInput('Filtrează…')}${sortSelect()}</div></div>`;
+      <div class="tools">${filterInput('Filtrează…')}${sortSelect()}${viewBtn()}</div></div>`;
   },
   list() {
     const q = norm(ui.filter.trim());
@@ -790,7 +835,8 @@ V.fav = {
       : ui.sort === 'title' ? (a, b) => a.title.localeCompare(b.title, 'ro') : (a, b) => (b.rating || 0) - (a.rating || 0) || a.title.localeCompare(b.title, 'ro'));
     if (!list.length) return ui.filter ? `<div class="empty">Niciun rezultat.</div>`
       : `<div class="empty"><b>${ui.fType === 'person' ? 'Niciun actor preferat încă' : 'Niciun preferat încă'}</b>${ui.fType === 'person' ? 'Deschide pagina unui actor (din distribuția unui film sau din Caută → Actori) și apasă ♥.' : 'Apasă ♥ în colțul din dreapta sus pe pagina unui film, serial sau actor.'}</div>`;
-    return wrapList(vlist(cardRows(list, (it) => (it._person ? personCard(it) : it.type === 'movie' ? movieCard(it, true) : tvCard(it, true)))));
+    return wrapList(vlist(listRows(list, (it) => (it._person ? personCard(it) : it.type === 'movie' ? movieCard(it, true) : tvCard(it, true)),
+      (it) => (it._person ? favPersonTile(it) : itemTile(it, true)))));
   }
 };
 
@@ -866,7 +912,7 @@ function resTitle() {
 }
 function gridRows() { // rânduri de câte 3 postere, cu înălțime calculată din lățimea ecranului
   const res = ui.sRes || [], cw = Math.min(window.innerWidth, 1000) - 32, tw = (cw - 20) / 3;
-  const rowH = Math.round(tw * (ui.sType === 'person' ? 1 : 1.5) + 5 + 31 + 17 + 14), rows = []; // actorii: poze rotunde (pătrate)
+  const rowH = ui.sType === 'person' ? Math.round(tw + 5 + 31 + 17 + 14) : Math.round(tw * 1.5 + 67 + 12), rows = []; // actorii: poze rotunde (pătrate)
   for (let i = 0; i < res.length; i += 3) {
     const a = i;
     rows.push({ h: rowH, html: () => `<div class="grow" style="height:${rowH}px">${(ui.sRes || []).slice(a, a + 3).map(tileHtml).join('')}</div>` });
@@ -920,14 +966,14 @@ function personTile(r) {
 }
 function tileHtml(r) {
   if (r && !r._stub && r.media_type === 'person') return personTile(r);
-  if (!r || r._stub) return `<div class="tile skel"><div class="poster ph"></div><div class="tt"></div><div class="ty"></div></div>`;
+  if (!r || r._stub) return `<div class="tile ntile skel"><div class="poster ph"></div><div class="tt"></div><div class="ty"></div></div>`;
   const type = r.media_type, key = `${type}:${r.id}`, it = db.items[key];
   const t = r.title || r.name, y = (r.release_date || r.first_air_date || '').slice(0, 4);
   const tag = it ? `<span class="tag in">${esc((type === 'movie' ? MOVIE_ST : TV_ST)[it.status])}</span>` : (ui.sType === 'all' ? `<span class="tag">${type === 'movie' ? 'Film' : 'Serial'}</span>` : '');
   const vote = r.vote_average && r.vote_count > 20 ? `<span class="vote">★ ${r.vote_average.toFixed(1)}</span>` : '';
   const date = (r.release_date || r.first_air_date || '');
   const ylabel = sf().sort === 'soon' && date > today() && !ui.sq.trim() ? fmtDate(date, { day: 'numeric', month: 'short', year: 'numeric' }) : y;
-  return `<div class="tile" data-act="openT" data-type="${type}" data-id="${r.id}">${tag}${poster(r.poster_path, t, '', 'w342')}<div class="tt">${esc(t)}</div><div class="ty">${ylabel}${vote}</div></div>`;
+  return `<div class="tile ntile" data-act="openT" data-type="${type}" data-id="${r.id}">${tag}${poster(r.poster_path, t, '', 'w342')}<div class="tt">${esc(t)}</div><div class="ty"><span>${ylabel}</span>${vote}</div></div>`;
 }
 function moreHtml() {
   if (!ui.sRes || ui.sPage >= ui.sTotal) return '';
@@ -2030,6 +2076,10 @@ const A = {
   pType(a) { ctx.pType = a.t; ctx.pAll = false; renderSheet(); },
   pSort(a) { ctx.pSort = a.s; renderSheet(); },
   pAll() { ctx.pAll = true; renderSheet(); },
+  view(a, el) { // comută postere / listă (aceeași alegere pentru Salvate și Preferate)
+    db.settings.view = gridView() ? 'list' : 'grid'; save();
+    el.outerHTML = viewBtn(); renderList(); window.scrollTo(0, 0);
+  },
   revAll() { ctx.revAll = true; renderSheet(); },
   async saveOmdb() {
     let v = $('#omdbIn').value.trim(); if (!v) return toast('Lipește cheia întâi');
@@ -2587,6 +2637,7 @@ window.addEventListener('online', () => { if (ui.tab === 'search' && !ui.sRes) r
 
 /* ---------- pornire ---------- */
 renderView();
+if (ui.tab === 'search' && !ui.sRes) runSearch(0); // aplicația se deschide pe Caută
 loadEggs().then(() => setTimeout(maybeEgg, 700));
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
