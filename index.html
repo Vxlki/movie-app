@@ -1203,11 +1203,9 @@ V.stats = {
     return `<div class="wrap">
       <div class="kpis">
         <div class="kpi"><b>${mv.length}</b><span>filme văzute</span></div>
-        <div class="kpi"><b>${mv.filter((m) => (m.watchedOn || '').startsWith(y)).length}</b><span>filme în ${y}</span></div>
         <div class="kpi"><b>${eps}</b><span>episoade văzute</span></div>
         <div class="kpi"><b>${tv.filter((t) => t.status === 'completed').length}</b><span>seriale terminate</span></div>
         <div class="kpi"><b>${hours}</b><span>ore${mv.some((m) => !m.runtime) ? ' (aprox.)' : ''}</span></div>
-        <div class="kpi"><b>${avg}</b><span>nota medie</span></div>
       </div>
       ${rated.length ? `<div class="chart"><h4>Notele tale</h4><div class="cols rt">${dist.map((v, i) => `<div><em>${v || ''}</em><i style="height:${v / dmx * 100}%"></i><span>${i + 1}</span></div>`).join('')}</div></div>` : ''}
       ${top.length ? `<div class="chart"><h4>Genuri preferate</h4>${top.map(([g, n]) => `<div class="hbar"><span>${esc(g)}</span><div class="bar"><i style="width:${n / gmx * 100}%"></i></div><b>${n}</b></div>`).join('')}</div>` : ''}
